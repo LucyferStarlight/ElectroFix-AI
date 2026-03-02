@@ -26,7 +26,7 @@
 
             <div class="d-flex align-items-center gap-2">
                 <button class="btn btn-ui btn-ghost btn-sm" type="button" data-ui-theme-toggle>
-                    Cambiar tema
+                    <span data-ui-theme-toggle-label>Cambiar tema</span>
                 </button>
                 @auth
                     <span class="small text-muted">{{ auth()->user()->name }} · {{ auth()->user()->role }}</span>

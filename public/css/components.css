@@ -34,7 +34,7 @@
 .btn-outline-ui {
   border: 1px solid var(--ef-border);
   color: var(--ef-text);
-  background-color: #fff;
+  background-color: var(--ef-surface);
 }
 
 .btn-outline-ui:hover {
@@ -48,7 +48,7 @@
 
 .btn-ghost:hover {
   border-color: var(--ef-border);
-  background-color: var(--ef-surface);
+  background-color: var(--ef-surface-soft);
 }
 
 .brand-mark {

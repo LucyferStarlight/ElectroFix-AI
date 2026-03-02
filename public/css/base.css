@@ -9,6 +9,7 @@
 
   --ef-text: #0f172a;
   --ef-text-muted: #64748b;
+  --ef-text-soft: #475569;
 
   --ef-accent: #0ea5e9;
   --ef-accent-strong: #0284c7;
@@ -28,6 +29,43 @@ body {
     radial-gradient(1000px 450px at 100% -20%, #e2e8f0 0%, transparent 55%),
     var(--ef-bg);
   min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+body,
+.card,
+.card-ui,
+.modal-content,
+.table,
+.form-label,
+.form-check-label,
+.navbar,
+.sidebar-link {
+  color: var(--ef-text);
+}
+
+.text-muted,
+.small.text-muted,
+.form-text,
+.table-ui thead th {
+  color: var(--ef-text-muted) !important;
+}
+
+.table-ui tbody td,
+.table-ui tbody th {
+  color: var(--ef-text-soft);
+}
+
+.form-control,
+.form-select,
+textarea {
+  color: var(--ef-text);
+  background-color: var(--ef-surface);
+}
+
+.form-control::placeholder,
+textarea::placeholder {
+  color: var(--ef-text-muted);
 }
 
 .bg-app {
@@ -49,4 +87,52 @@ body {
 
 .link-ui:hover {
   text-decoration: underline;
+}
+
+.navbar .nav-link,
+.navbar-brand {
+  color: var(--ef-text);
+}
+
+.navbar .nav-link:hover,
+.navbar-brand:hover {
+  color: var(--ef-accent-strong);
+}
+
+.navbar-brand,
+.navbar-brand .text-accent {
+  transition: color 0.2s ease;
+}
+
+/* Modo claro: invierte negro <-> azul en el logo */
+body:not(.theme-dark) .navbar-brand:hover {
+  color: var(--ef-accent) !important;
+}
+
+body:not(.theme-dark) .navbar-brand:hover .text-accent {
+  color: #000 !important;
+}
+
+/* Modo oscuro: al hover del logo, invierte colores (blanco <-> azul) */
+body.theme-dark .navbar-brand:hover {
+  color: var(--ef-accent) !important;
+}
+
+body.theme-dark .navbar-brand:hover .text-accent {
+  color: #fff !important;
+}
+
+body.theme-dark {
+  --ef-bg: #0f172a;
+  --ef-surface: #111827;
+  --ef-surface-soft: #1f2937;
+  --ef-border: #334155;
+  --ef-text: #f8fafc;
+  --ef-text-muted: #94a3b8;
+  --ef-text-soft: #cbd5e1;
+  --ef-shadow: 0 12px 28px -18px rgba(2, 6, 23, 0.75);
+  background:
+    radial-gradient(1200px 500px at 0% -10%, #082f49 0%, transparent 60%),
+    radial-gradient(1000px 450px at 100% -20%, #1e293b 0%, transparent 55%),
+    var(--ef-bg);
 }
