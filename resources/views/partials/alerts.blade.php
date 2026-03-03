@@ -3,6 +3,10 @@
         <div class="alert alert-ui-info mb-2" role="alert">{{ session('success') }}</div>
     @endif
 
+    @if (session('warning'))
+        <div class="alert alert-ui-warning mb-2" role="alert">{{ session('warning') }}</div>
+    @endif
+
     @if ($errors->any())
         <div class="alert alert-ui-warning mb-2" role="alert">{{ $errors->first() }}</div>
     @endif

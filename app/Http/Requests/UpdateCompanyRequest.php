@@ -27,6 +27,7 @@ class UpdateCompanyRequest extends FormRequest
             'country' => ['required', 'string', 'size:2'],
             'postal_code' => ['nullable', 'string', 'max:20'],
             'currency' => ['required', 'string', 'size:3'],
+            'vat_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
         ];
     }

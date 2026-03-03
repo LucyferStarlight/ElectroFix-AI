@@ -8,6 +8,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
+use App\Http\Controllers\Worker\BillingController;
+use App\Http\Controllers\Worker\InventoryController;
 use App\Http\Controllers\Worker\OrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,12 +39,33 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:worker,admin,developer')->group(function (): void {
-        Route::get('/worker/inventory', [EquipmentController::class, 'index'])
+        Route::get('/worker/inventory', [InventoryController::class, 'index'])
             ->middleware('module_access:inventory')
             ->name('worker.inventory');
-        Route::get('/worker/billing', [OrderController::class, 'index'])
+        Route::post('/worker/inventory', [InventoryController::class, 'store'])
+            ->middleware('module_access:inventory')
+            ->name('worker.inventory.store');
+        Route::patch('/worker/inventory/{item}/stock', [InventoryController::class, 'adjustStock'])
+            ->middleware('module_access:inventory')
+            ->name('worker.inventory.stock');
+        Route::delete('/worker/inventory/{item}', [InventoryController::class, 'destroy'])
+            ->middleware('module_access:inventory')
+            ->name('worker.inventory.destroy');
+        Route::get('/worker/billing', [BillingController::class, 'index'])
             ->middleware('module_access:billing')
             ->name('worker.billing');
+        Route::post('/worker/billing', [BillingController::class, 'store'])
+            ->middleware('module_access:billing')
+            ->name('worker.billing.store');
+        Route::get('/worker/billing/customers/{customer}/services', [BillingController::class, 'customerServices'])
+            ->middleware('module_access:billing')
+            ->name('worker.billing.customer-services');
+        Route::get('/worker/billing/{document}', [BillingController::class, 'show'])
+            ->middleware('module_access:billing')
+            ->name('worker.billing.show');
+        Route::get('/worker/billing/{document}/pdf', [BillingController::class, 'pdf'])
+            ->middleware('module_access:billing')
+            ->name('worker.billing.pdf');
     });
 
     Route::middleware('role:admin')->group(function (): void {

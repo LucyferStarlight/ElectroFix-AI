@@ -25,8 +25,16 @@ class Company extends Model
         'country',
         'postal_code',
         'currency',
+        'vat_percentage',
         'notes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'vat_percentage' => 'decimal:2',
+        ];
+    }
 
     public function users(): HasMany
     {
@@ -51,5 +59,25 @@ class Company extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function inventoryItems(): HasMany
+    {
+        return $this->hasMany(InventoryItem::class);
+    }
+
+    public function inventoryMovements(): HasMany
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
+    public function billingDocuments(): HasMany
+    {
+        return $this->hasMany(BillingDocument::class);
+    }
+
+    public function aiUsages(): HasMany
+    {
+        return $this->hasMany(CompanyAiUsage::class);
     }
 }

@@ -12,6 +12,7 @@ class AiDiagnosticService
         $parts = [];
         $time = '2-4 horas';
         $advice = 'Realiza primero una inspección eléctrica básica y confirma continuidad de componentes críticos.';
+        $repairLaborCost = 500.00;
 
         if (str_contains($text, 'no enciende') || str_contains($text, 'enciende')) {
             $causes[] = 'Falla en fuente de alimentación o tarjeta principal.';
@@ -19,6 +20,7 @@ class AiDiagnosticService
             $parts[] = 'Fusible térmico';
             $time = '3-5 horas';
             $advice = 'Verifica voltajes de entrada/salida antes de reemplazar módulos.';
+            $repairLaborCost = 850.00;
         }
 
         if (str_contains($text, 'ruido') || str_contains($text, 'vibr')) {
@@ -26,6 +28,7 @@ class AiDiagnosticService
             $parts[] = 'Rodamientos';
             $parts[] = 'Soportes antivibración';
             $time = '2-3 horas';
+            $repairLaborCost = max($repairLaborCost, 700.00);
         }
 
         if (str_contains($text, 'fuga') || str_contains($text, 'agua')) {
@@ -33,19 +36,34 @@ class AiDiagnosticService
             $parts[] = 'Kit de sellos';
             $parts[] = 'Manguera de drenaje';
             $time = '1-2 horas';
+            $repairLaborCost = max($repairLaborCost, 600.00);
         }
 
         if (empty($causes)) {
             $causes[] = 'Posible combinación de fallo electrónico y desgaste por uso.';
-            $parts[] = 'Kit de diagnóstico estándar';
+            $advice = 'Se recomienda mantenimiento preventivo, limpieza técnica y recalibración antes de cambiar piezas.';
+            $repairLaborCost = 450.00;
         }
+
+        $parts = array_values(array_unique($parts));
+        $requiresPartsReplacement = ! empty($parts);
+        $replacementPartsCost = $requiresPartsReplacement ? count($parts) * 320.00 : 0.00;
+        $replacementTotalCost = $requiresPartsReplacement
+            ? round($replacementPartsCost + $repairLaborCost, 2)
+            : 0.00;
 
         return [
             'equipment' => trim($brand.' '.$type.' '.($model ?? '')),
             'potential_causes' => array_values(array_unique($causes)),
             'estimated_time' => $time,
-            'suggested_parts' => array_values(array_unique($parts)),
+            'suggested_parts' => $parts,
             'technical_advice' => $advice,
+            'requires_parts_replacement' => $requiresPartsReplacement,
+            'cost_suggestion' => [
+                'repair_labor_cost' => round($repairLaborCost, 2),
+                'replacement_parts_cost' => round($replacementPartsCost, 2),
+                'replacement_total_cost' => $replacementTotalCost,
+            ],
         ];
     }
 }

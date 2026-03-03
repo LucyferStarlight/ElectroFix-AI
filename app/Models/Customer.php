@@ -33,4 +33,9 @@ class Customer extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function billingDocuments(): HasMany
+    {
+        return $this->hasMany(BillingDocument::class);
+    }
 }

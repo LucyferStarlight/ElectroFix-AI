@@ -34,7 +34,7 @@ class UserSeeder extends Seeder
                 'role' => 'worker',
                 'is_active' => true,
                 'can_access_billing' => false,
-                'can_access_inventory' => false,
+                'can_access_inventory' => true,
                 'password' => 'password123',
             ]
         );

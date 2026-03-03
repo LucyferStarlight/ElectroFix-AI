@@ -20,6 +20,13 @@
                 <button class="btn btn-ui btn-outline-ui" type="submit">Buscar</button>
             </form>
             <span class="badge badge-ui badge-ui-info">{{ $orders->total() }} órdenes</span>
+            <span class="badge badge-ui {{ $aiEnabled ? 'badge-ui-success' : 'badge-ui-warning' }}">
+                IA: {{ $aiEnabled ? 'habilitada' : 'no disponible en plan '.strtoupper($aiPlan) }}
+            </span>
+            @if($aiEnabled)
+                <span class="badge badge-ui badge-ui-info">Consultas IA {{ $aiQueriesUsed }}/{{ $aiQueryLimit }}</span>
+                <span class="badge badge-ui badge-ui-warning">Tokens IA {{ number_format($aiTokensUsed) }}/{{ number_format($aiTokenLimit) }}</span>
+            @endif
         </div>
     </div>
 
@@ -103,6 +110,24 @@
                                                 N/A
                                             @endif
                                         </p>
+                                        @if($order->ai_diagnosed_at)
+                                            <p class="mb-1">
+                                                <strong>Costo sugerido (mano de obra):</strong>
+                                                ${{ number_format((float) ($order->ai_cost_repair_labor ?? 0), 2) }}
+                                            </p>
+                                            @if($order->ai_requires_parts_replacement)
+                                                <p class="mb-1">
+                                                    <strong>Costo piezas sugeridas:</strong>
+                                                    ${{ number_format((float) ($order->ai_cost_replacement_parts ?? 0), 2) }}
+                                                </p>
+                                                <p class="mb-1">
+                                                    <strong>Costo total con reemplazo:</strong>
+                                                    ${{ number_format((float) ($order->ai_cost_replacement_total ?? 0), 2) }}
+                                                </p>
+                                            @endif
+                                            <p class="mb-1"><strong>Tokens estimados usados:</strong> {{ number_format((int) ($order->ai_tokens_used ?? 0)) }}</p>
+                                            <p class="mb-1"><strong>Diagnóstico generado:</strong> {{ $order->ai_diagnosed_at?->format('Y-m-d H:i') }}</p>
+                                        @endif
                                         <p class="mb-0"><strong>Consejo técnico:</strong> {{ $order->ai_technical_advice ?: 'N/A' }}</p>
                                     </div></div>
                                 </div>
@@ -155,12 +180,42 @@
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label">Síntomas reportados</label>
-                                    <textarea class="form-control input-ui" rows="4" name="symptoms" id="orderSymptoms" placeholder="Describe los problemas..."></textarea>
+                                    <textarea class="form-control input-ui" rows="4" name="symptoms" id="orderSymptoms" maxlength="600" placeholder="Describe los problemas..."></textarea>
+                                    <small class="text-muted d-block mt-1"><span id="symptomsCounter">0</span>/600 caracteres.</small>
                                 </div>
                                 <div class="col-md-6"><label class="form-label">Costo estimado</label><input class="form-control input-ui" type="number" step="0.01" min="0" name="estimated_cost"></div>
-                                <div class="col-md-6"><label class="form-label">Técnico asignado *</label><input class="form-control input-ui" name="technician" required></div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Técnico asignado *</label>
+                                    @if(auth()->user()->role === 'admin')
+                                        <select class="form-select input-ui" name="technician_user_id" required>
+                                            <option value="">Seleccionar técnico...</option>
+                                            @foreach($companyTechnicians as $technician)
+                                                <option value="{{ $technician->id }}">
+                                                    {{ $technician->name }} ({{ strtoupper($technician->role) }})
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    @elseif(auth()->user()->role === 'worker')
+                                        <input class="form-control input-ui" value="{{ auth()->user()->name }}" readonly>
+                                        <input type="hidden" name="technician" value="{{ auth()->user()->name }}">
+                                    @else
+                                        <input class="form-control input-ui" name="technician" required>
+                                    @endif
+                                </div>
                                 <div class="col-12">
-                                    <button class="btn btn-ui btn-outline-ui w-100" id="aiDiagnoseBtn" type="button">Consultar Asistente AI</button>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="1" name="request_ai_diagnosis" id="requestAiDiagnosis" @disabled(!$aiEnabled)>
+                                        <label class="form-check-label" for="requestAiDiagnosis">
+                                            Solicitar diagnóstico IA al guardar la orden
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        @if($aiEnabled)
+                                            Disponible en plan {{ strtoupper($aiPlan) }}. Límite de este mes: {{ $aiQueriesUsed }}/{{ $aiQueryLimit }} consultas.
+                                        @else
+                                            Esta función está disponible solo en planes Enterprise y Developer Test.
+                                        @endif
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -168,7 +223,12 @@
                             <div class="card card-ui h-100">
                                 <div class="card-body" id="aiPanel">
                                     <h6 class="fw-bold">Análisis AI</h6>
-                                    <p class="text-muted">Usa el asistente para obtener causas probables, tiempo estimado y repuestos sugeridos.</p>
+                                    <p class="text-muted mb-2">Se ejecuta al guardar la orden y solo una vez por orden.</p>
+                                    <ul class="mb-0 text-muted">
+                                        <li>Obtiene equipo + falla reportada.</li>
+                                        <li>Genera diagnóstico preliminar y costos sugeridos.</li>
+                                        <li>Si no requiere piezas, muestra solo mano de obra.</li>
+                                    </ul>
                                 </div>
                             </div>
                         </div>
@@ -187,8 +247,8 @@
 (() => {
     const customerSelect = document.getElementById('orderCustomer');
     const equipmentSelect = document.getElementById('orderEquipment');
-    const aiBtn = document.getElementById('aiDiagnoseBtn');
-    const aiPanel = document.getElementById('aiPanel');
+    const symptomsInput = document.getElementById('orderSymptoms');
+    const symptomsCounter = document.getElementById('symptomsCounter');
 
     if (customerSelect && equipmentSelect) {
         customerSelect.addEventListener('change', function () {
@@ -201,44 +261,20 @@
         });
     }
 
-    if (aiBtn && aiPanel) {
-        aiBtn.addEventListener('click', async function () {
-            const equipmentId = equipmentSelect.value;
-            const symptoms = document.getElementById('orderSymptoms').value;
+    if (symptomsInput && symptomsCounter) {
+        const syncCounter = () => {
+            const current = symptomsInput.value.length;
+            symptomsCounter.textContent = String(current);
+        };
 
-            if (!equipmentId || !symptoms || symptoms.length < 5) {
-                aiPanel.innerHTML = '<h6 class="fw-bold">Análisis AI</h6><p class="text-danger mb-0">Selecciona equipo y describe síntomas (mínimo 5 caracteres).</p>';
-                return;
+        symptomsInput.addEventListener('input', () => {
+            if (symptomsInput.value.length > 600) {
+                symptomsInput.value = symptomsInput.value.slice(0, 600);
             }
-
-            aiPanel.innerHTML = '<h6 class="fw-bold">Análisis AI</h6><p class="text-muted mb-0">Consultando...</p>';
-
-            try {
-                const response = await fetch("{{ route('worker.orders.diagnose') }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': "{{ csrf_token() }}",
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ equipment_id: equipmentId, symptoms })
-                });
-
-                if (!response.ok) throw new Error('No se pudo obtener diagnóstico.');
-                const data = await response.json();
-
-                aiPanel.innerHTML = `
-                    <h6 class="fw-bold">Análisis AI (${data.equipment})</h6>
-                    <p class="mb-1"><strong>Posibles causas:</strong></p>
-                    <ul>${(data.potential_causes || []).map(c => `<li>${c}</li>`).join('')}</ul>
-                    <p class="mb-1"><strong>Tiempo estimado:</strong> ${data.estimated_time || 'N/A'}</p>
-                    <p class="mb-1"><strong>Repuestos sugeridos:</strong> ${(data.suggested_parts || []).join(', ') || 'N/A'}</p>
-                    <p class="mb-0"><strong>Consejo técnico:</strong> ${data.technical_advice || 'N/A'}</p>
-                `;
-            } catch (error) {
-                aiPanel.innerHTML = '<h6 class="fw-bold">Análisis AI</h6><p class="text-danger mb-0">Error al consultar el asistente.</p>';
-            }
+            syncCounter();
         });
+
+        syncCounter();
     }
 })();
 </script>

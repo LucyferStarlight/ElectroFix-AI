@@ -24,6 +24,7 @@ class CompanySeeder extends Seeder
                 'country' => 'MX',
                 'postal_code' => '06600',
                 'currency' => 'MXN',
+                'vat_percentage' => 16,
                 'notes' => 'Empresa demo principal para entorno local.',
             ]
         );
@@ -43,6 +44,7 @@ class CompanySeeder extends Seeder
                 'country' => 'MX',
                 'postal_code' => '64000',
                 'currency' => 'MXN',
+                'vat_percentage' => 16,
                 'notes' => 'Empresa fija para pruebas de developer.',
             ]
         );

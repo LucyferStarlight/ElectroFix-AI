@@ -23,7 +23,8 @@
                 <div class="col-md-3"><label class="form-label">País</label><input class="form-control input-ui" name="country" value="{{ old('country', $company->country) }}" required></div>
                 <div class="col-md-3"><label class="form-label">CP</label><input class="form-control input-ui" name="postal_code" value="{{ old('postal_code', $company->postal_code) }}"></div>
                 <div class="col-md-3"><label class="form-label">Moneda</label><input class="form-control input-ui" name="currency" value="{{ old('currency', $company->currency) }}" required></div>
-                <div class="col-md-9"><label class="form-label">Notas</label><input class="form-control input-ui" name="notes" value="{{ old('notes', $company->notes) }}"></div>
+                <div class="col-md-3"><label class="form-label">IVA (%)</label><input class="form-control input-ui" type="number" step="0.01" min="0" max="100" name="vat_percentage" value="{{ old('vat_percentage', $company->vat_percentage ?? 16) }}" required></div>
+                <div class="col-md-6"><label class="form-label">Notas</label><input class="form-control input-ui" name="notes" value="{{ old('notes', $company->notes) }}"></div>
                 <div class="col-12"><button class="btn btn-ui btn-primary-ui" type="submit">Guardar cambios</button></div>
             </form>
         </div>

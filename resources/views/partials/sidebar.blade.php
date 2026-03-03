@@ -18,35 +18,35 @@
             @php($user = auth()->user())
 
             <p class="sidebar-section">Dashboard</p>
-            <a class="sidebar-link" href="{{ route('dashboard') }}">Inicio</a>
+            <a class="sidebar-link {{ request()->routeIs('dashboard*') ? 'active' : '' }}" href="{{ route('dashboard') }}">Inicio</a>
 
             @if(in_array($user->role, ['worker', 'admin', 'developer'], true))
                 <p class="sidebar-section mt-4">Operación</p>
-                <a class="sidebar-link" href="{{ route('worker.orders') }}">Órdenes</a>
-                <a class="sidebar-link" href="{{ route('worker.customers') }}">Clientes</a>
-                <a class="sidebar-link" href="{{ route('worker.equipments') }}">Equipos</a>
+                <a class="sidebar-link {{ request()->routeIs('worker.orders*') ? 'active' : '' }}" href="{{ route('worker.orders') }}">Órdenes</a>
+                <a class="sidebar-link {{ request()->routeIs('worker.customers*') ? 'active' : '' }}" href="{{ route('worker.customers') }}">Clientes</a>
+                <a class="sidebar-link {{ request()->routeIs('worker.equipments*') ? 'active' : '' }}" href="{{ route('worker.equipments') }}">Equipos</a>
                 @if($user->canAccessModule('inventory'))
-                    <a class="sidebar-link" href="{{ route('worker.inventory') }}">Inventario</a>
+                    <a class="sidebar-link {{ request()->routeIs('worker.inventory*') ? 'active' : '' }}" href="{{ route('worker.inventory') }}">Inventario</a>
                 @endif
                 @if($user->canAccessModule('billing'))
-                    <a class="sidebar-link" href="{{ route('worker.billing') }}">Facturación</a>
+                    <a class="sidebar-link {{ request()->routeIs('worker.billing*') ? 'active' : '' }}" href="{{ route('worker.billing') }}">Facturación</a>
                 @endif
             @endif
 
             @if($user->role === 'admin')
                 <p class="sidebar-section mt-4">Administración</p>
-                <a class="sidebar-link" href="{{ route('dashboard.admin') }}">Panel Admin</a>
-                <a class="sidebar-link" href="{{ route('admin.workers.index') }}">Trabajadores</a>
-                <a class="sidebar-link" href="{{ route('admin.company.edit') }}">Datos Empresa</a>
-                <a class="sidebar-link" href="{{ route('admin.subscription.edit') }}">Suscripción</a>
+                <a class="sidebar-link {{ request()->routeIs('dashboard.admin') ? 'active' : '' }}" href="{{ route('dashboard.admin') }}">Panel Admin</a>
+                <a class="sidebar-link {{ request()->routeIs('admin.workers.*') ? 'active' : '' }}" href="{{ route('admin.workers.index') }}">Trabajadores</a>
+                <a class="sidebar-link {{ request()->routeIs('admin.company.*') ? 'active' : '' }}" href="{{ route('admin.company.edit') }}">Datos Empresa</a>
+                <a class="sidebar-link {{ request()->routeIs('admin.subscription.*') ? 'active' : '' }}" href="{{ route('admin.subscription.edit') }}">Suscripción</a>
             @endif
 
             @if($user->role === 'developer')
                 <p class="sidebar-section mt-4">Developer</p>
-                <a class="sidebar-link" href="{{ route('dashboard.developer') }}">Panel Developer</a>
-                <a class="sidebar-link" href="{{ route('developer.companies.index') }}">Empresas</a>
-                <a class="sidebar-link" href="{{ route('developer.subscriptions') }}">Suscripciones</a>
-                <a class="sidebar-link" href="{{ route('developer.test-company') }}">Empresa Test</a>
+                <a class="sidebar-link {{ request()->routeIs('dashboard.developer') ? 'active' : '' }}" href="{{ route('dashboard.developer') }}">Panel Developer</a>
+                <a class="sidebar-link {{ request()->routeIs('developer.companies.*') ? 'active' : '' }}" href="{{ route('developer.companies.index') }}">Empresas</a>
+                <a class="sidebar-link {{ request()->routeIs('developer.subscriptions') ? 'active' : '' }}" href="{{ route('developer.subscriptions') }}">Suscripciones</a>
+                <a class="sidebar-link {{ request()->routeIs('developer.test-company') ? 'active' : '' }}" href="{{ route('developer.test-company') }}">Empresa Test</a>
             @endif
         @endauth
     </nav>

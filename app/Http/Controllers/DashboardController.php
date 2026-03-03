@@ -24,19 +24,33 @@ class DashboardController extends Controller
 
     public function worker(Request $request)
     {
-        $company = $request->user()->company;
+        $user = $request->user();
+        $company = $user->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
+        $delegatedOrdersQuery = Order::query()
+            ->where('company_id', $company->id)
+            ->where('technician', $user->name);
+
         $stats = [
-            'orders' => Order::query()->where('company_id', $company->id)->count(),
+            'orders' => $delegatedOrdersQuery->count(),
             'customers' => Customer::query()->where('company_id', $company->id)->count(),
             'equipments' => Equipment::query()->where('company_id', $company->id)->count(),
         ];
+
+        $delegatedOrders = Order::query()
+            ->with(['customer', 'equipment'])
+            ->where('company_id', $company->id)
+            ->where('technician', $user->name)
+            ->latest('created_at')
+            ->limit(10)
+            ->get();
 
         return view('dashboard.worker', [
             'currentPage' => 'dashboard-worker',
             'stats' => $stats,
             'company' => $company,
+            'delegatedOrders' => $delegatedOrders,
         ]);
     }
 

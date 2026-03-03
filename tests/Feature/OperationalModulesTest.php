@@ -74,7 +74,56 @@ class OperationalModulesTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_order_diagnose_endpoint_returns_analysis_json(): void
+    public function test_admin_assigns_worker_as_technician_when_creating_order(): void
+    {
+        $company = Company::factory()->create();
+        $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id]);
+        $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id, 'name' => 'Worker Técnico']);
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+
+        $this->actingAs($admin)
+            ->post(route('worker.orders.store'), [
+                'customer_id' => $customer->id,
+                'equipment_id' => $equipment->id,
+                'technician_user_id' => $worker->id,
+                'symptoms' => 'No arranca',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('orders', [
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'technician' => 'Worker Técnico',
+        ]);
+    }
+
+    public function test_admin_can_assign_himself_as_technician_when_creating_order(): void
+    {
+        $company = Company::factory()->create();
+        $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id, 'name' => 'Admin Técnico']);
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+
+        $this->actingAs($admin)
+            ->post(route('worker.orders.store'), [
+                'customer_id' => $customer->id,
+                'equipment_id' => $equipment->id,
+                'technician_user_id' => $admin->id,
+                'symptoms' => 'No enfría',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('orders', [
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'technician' => 'Admin Técnico',
+        ]);
+    }
+
+    public function test_order_diagnose_endpoint_is_disabled_for_direct_consumption(): void
     {
         $company = Company::factory()->create();
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
@@ -86,13 +135,9 @@ class OperationalModulesTest extends TestCase
                 'equipment_id' => $equipment->id,
                 'symptoms' => 'No enciende, hay ruido y fuga de agua',
             ])
-            ->assertOk()
-            ->assertJsonStructure([
-                'equipment',
-                'potential_causes',
-                'estimated_time',
-                'suggested_parts',
-                'technical_advice',
+            ->assertStatus(422)
+            ->assertJson([
+                'message' => 'La consulta directa está deshabilitada. Activa "Solicitar diagnóstico IA" y guarda la orden.',
             ]);
     }
 }

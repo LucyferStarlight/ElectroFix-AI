@@ -128,3 +128,34 @@
   color: var(--ef-text-muted);
   border-bottom-color: var(--ef-border);
 }
+
+.billing-modal-dialog {
+  max-height: calc(100vh - 1rem);
+}
+
+.billing-modal-content {
+  max-height: calc(100vh - 2rem);
+}
+
+.billing-modal-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.billing-modal-form .modal-body {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+@media (max-width: 767.98px) {
+  .billing-modal-dialog {
+    margin: 0.5rem;
+    max-height: calc(100vh - 0.5rem);
+  }
+
+  .billing-modal-content {
+    max-height: calc(100vh - 1rem);
+  }
+}

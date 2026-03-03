@@ -13,6 +13,8 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             SubscriptionSeeder::class,
             OperationalDataSeeder::class,
+            InventorySeeder::class,
+            BillingSeeder::class,
         ]);
     }
 }

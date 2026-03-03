@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\Customer;
+use App\Models\Equipment;
+use App\Models\Order;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,5 +126,33 @@ class RoleDashboardAccessTest extends TestCase
 
         $this->actingAs($worker)->get(route('worker.billing'))->assertOk();
         $this->actingAs($worker)->get(route('worker.inventory'))->assertOk();
+    }
+
+    public function test_worker_dashboard_shows_only_delegated_orders_to_worker(): void
+    {
+        $company = Company::factory()->create();
+        $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id, 'name' => 'Worker Uno']);
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+
+        Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'technician' => 'Worker Uno',
+        ]);
+
+        Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'technician' => 'Otro Técnico',
+        ]);
+
+        $this->actingAs($worker)
+            ->get(route('dashboard.worker'))
+            ->assertOk()
+            ->assertSee('Órdenes delegadas')
+            ->assertDontSee('No tienes órdenes delegadas actualmente.');
     }
 }

@@ -8,7 +8,10 @@ use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\Order;
-use App\Services\AiDiagnosticService;
+use App\Models\User;
+use App\Services\AiPlanPolicyService;
+use App\Services\AiUsageService;
+use App\Services\OrderCreationService;
 use App\Support\OrderStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -16,21 +19,36 @@ use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, AiPlanPolicyService $aiPlanPolicyService, AiUsageService $aiUsageService)
     {
+        $user = $request->user();
         $orders = Order::query()
             ->with(['customer', 'equipment'])
             ->orderByDesc('created_at');
 
         $customers = Customer::query()->orderBy('name');
         $equipments = Equipment::query()->orderByDesc('created_at');
+        $companyTechnicians = collect();
 
-        if ($request->user()->role !== 'developer') {
-            $companyId = $request->user()->company_id;
+        if ($user->role !== 'developer') {
+            $companyId = $user->company_id;
             $orders->where('company_id', $companyId);
             $customers->where('company_id', $companyId);
             $equipments->where('company_id', $companyId);
+
+            $companyTechnicians = User::query()
+                ->where('company_id', $companyId)
+                ->whereIn('role', ['worker', 'admin'])
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'role']);
         }
+
+        $plan = (string) ($user?->company?->subscription?->plan ?? 'starter');
+        $aiEnabled = $aiPlanPolicyService->supportsAi($plan);
+        $monthlyUsage = $user?->company
+            ? $aiUsageService->monthlyUsage($user->company)
+            : ['queries_used' => 0, 'tokens_used' => 0];
 
         if ($search = trim((string) $request->query('search'))) {
             $orders->where(function ($q) use ($search): void {
@@ -53,30 +71,27 @@ class OrderController extends Controller
             'equipments' => $equipments->get(),
             'search' => $search ?? '',
             'statuses' => OrderStatus::all(),
+            'companyTechnicians' => $companyTechnicians,
+            'aiPlan' => $plan,
+            'aiEnabled' => $aiEnabled,
+            'aiQueryLimit' => $aiPlanPolicyService->queryLimit($plan),
+            'aiTokenLimit' => $aiPlanPolicyService->tokenLimit($plan),
+            'aiQueriesUsed' => $monthlyUsage['queries_used'],
+            'aiTokensUsed' => $monthlyUsage['tokens_used'],
         ]);
     }
 
-    public function store(StoreOrderRequest $request): RedirectResponse
+    public function store(StoreOrderRequest $request, OrderCreationService $orderCreationService): RedirectResponse
     {
-        $customer = Customer::query()->findOrFail($request->integer('customer_id'));
-        $equipment = Equipment::query()->findOrFail($request->integer('equipment_id'));
+        $result = $orderCreationService->create($request->user(), $request->validated());
+        $warning = $result['ai_warning'] ?? null;
 
-        if ($customer->company_id !== $equipment->company_id) {
-            abort(422, 'Cliente y equipo no pertenecen a la misma empresa.');
+        $response = back()->with('success', 'Orden creada exitosamente.');
+        if ($warning) {
+            $response->with('warning', $warning);
         }
 
-        if ($request->user()->role !== 'developer' && $customer->company_id !== $request->user()->company_id) {
-            abort(403, 'No puedes crear órdenes fuera de tu empresa.');
-        }
-
-        Order::query()->create([
-            ...$request->validated(),
-            'company_id' => $customer->company_id,
-            'status' => $request->input('status', OrderStatus::RECEIVED),
-            'estimated_cost' => $request->input('estimated_cost', 0),
-        ]);
-
-        return back()->with('success', 'Orden creada exitosamente.');
+        return $response;
     }
 
     public function updateStatus(UpdateOrderStatusRequest $request, Order $order): RedirectResponse
@@ -87,11 +102,11 @@ class OrderController extends Controller
         return back()->with('success', 'Estado de orden actualizado.');
     }
 
-    public function diagnose(Request $request, AiDiagnosticService $aiDiagnosticService): JsonResponse
+    public function diagnose(Request $request): JsonResponse
     {
         $data = $request->validate([
             'equipment_id' => ['required', 'integer', 'exists:equipments,id'],
-            'symptoms' => ['required', 'string', 'min:5'],
+            'symptoms' => ['required', 'string', 'min:5', 'max:600'],
         ]);
 
         $equipment = Equipment::query()->findOrFail($data['equipment_id']);
@@ -100,14 +115,9 @@ class OrderController extends Controller
             abort(403, 'No puedes analizar equipos fuera de tu empresa.');
         }
 
-        $analysis = $aiDiagnosticService->analyze(
-            $equipment->type,
-            $equipment->brand,
-            $equipment->model,
-            $data['symptoms']
-        );
-
-        return response()->json($analysis);
+        return response()->json([
+            'message' => 'La consulta directa está deshabilitada. Activa "Solicitar diagnóstico IA" y guarda la orden.',
+        ], 422);
     }
 
     private function authorizeOrder(Request $request, Order $order): void
