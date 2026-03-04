@@ -10,52 +10,42 @@ use App\Services\Exceptions\AiUsageException;
 class AiUsageService
 {
     public function __construct(
-        private readonly AiPlanPolicyService $planPolicyService,
-        private readonly AiTokenEstimator $tokenEstimator
+        private readonly PlanPolicyService $planPolicyService,
+        private readonly AiTokenEstimator $tokenEstimator,
+        private readonly AiQuotaGuardService $quotaGuardService
     ) {
     }
 
     public function validateBeforeUsage(Company $company, string $plan, int $projectedPromptTokens, ?string $yearMonth = null): void
     {
-        $yearMonth ??= now()->format('Y-m');
-
-        if (! $this->planPolicyService->supportsAi($plan)) {
+        $planModel = $this->planPolicyService->planFor($plan);
+        if (! $planModel || ! $planModel->ai_enabled) {
             throw new AiUsageException('blocked_plan', 'Tu plan actual no incluye Asistente IA.');
         }
 
-        $usage = $this->monthlyUsage($company, $yearMonth);
-
-        if ($usage['queries_used'] >= $this->planPolicyService->queryLimit($plan)) {
-            throw new AiUsageException('blocked_quota', 'Se alcanzó el límite mensual de consultas IA para tu empresa.');
-        }
-
-        if (($usage['tokens_used'] + $projectedPromptTokens) > $this->planPolicyService->tokenLimit($plan)) {
-            throw new AiUsageException('blocked_tokens', 'Se alcanzó el límite mensual de consumo IA para tu empresa.');
-        }
+        $this->quotaGuardService->validateBeforeUsage($company, $planModel, $projectedPromptTokens);
     }
 
     public function validateAfterUsage(Company $company, string $plan, int $realTotalTokens, ?string $yearMonth = null): void
     {
-        $yearMonth ??= now()->format('Y-m');
-        $usage = $this->monthlyUsage($company, $yearMonth);
-
-        if (($usage['tokens_used'] + $realTotalTokens) > $this->planPolicyService->tokenLimit($plan)) {
-            throw new AiUsageException('blocked_tokens', 'Se alcanzó el límite mensual de consumo IA para tu empresa.');
+        $planModel = $this->planPolicyService->planFor($plan);
+        if (! $planModel || ! $planModel->ai_enabled) {
+            throw new AiUsageException('blocked_plan', 'Tu plan actual no incluye Asistente IA.');
         }
+
+        // Definitive transactional check + increment to avoid race conditions.
+        $this->quotaGuardService->incrementUsage($company, $planModel, $realTotalTokens);
     }
 
     public function monthlyUsage(Company $company, ?string $yearMonth = null): array
     {
-        $yearMonth ??= now()->format('Y-m');
-
-        $successRows = CompanyAiUsage::query()
-            ->where('company_id', $company->id)
-            ->where('year_month', $yearMonth)
-            ->where('status', 'success');
+        $summary = $this->quotaGuardService->ensureUsageRow($company);
 
         return [
-            'queries_used' => (int) (clone $successRows)->count(),
-            'tokens_used' => (int) (clone $successRows)->sum('total_tokens_estimated'),
+            'queries_used' => (int) $summary->ai_requests_used,
+            'tokens_used' => (int) $summary->ai_tokens_used,
+            'overage_requests' => (int) $summary->overage_requests,
+            'overage_tokens' => (int) $summary->overage_tokens,
         ];
     }
 
@@ -67,7 +57,9 @@ class AiUsageService
         int $responseChars,
         ?string $yearMonth = null
     ): CompanyAiUsage {
-        $yearMonth ??= now()->format('Y-m');
+        $summary = $this->quotaGuardService->ensureUsageRow($company);
+        $yearMonth = $summary->current_cycle_start->format('Y-m');
+
         $promptTokens = $this->tokenEstimator->estimateFromChars($promptChars);
         $responseTokens = $this->tokenEstimator->estimateFromChars($responseChars);
         $totalTokens = $promptTokens + $responseTokens;
@@ -97,7 +89,8 @@ class AiUsageService
         int $responseChars = 0,
         ?string $yearMonth = null
     ): CompanyAiUsage {
-        $yearMonth ??= now()->format('Y-m');
+        $summary = $this->quotaGuardService->ensureUsageRow($company);
+        $yearMonth = $summary->current_cycle_start->format('Y-m');
 
         return CompanyAiUsage::query()->create([
             'company_id' => $company->id,
@@ -112,5 +105,17 @@ class AiUsageService
             'status' => $status,
             'error_message' => $errorMessage,
         ]);
+    }
+
+    public function calculateEnterpriseOverageCost(string $plan, int $overageRequests, int $overageTokens): array
+    {
+        $extraRequestsCost = $overageRequests * $this->planPolicyService->overagePricePerRequest($plan);
+        $extraTokensCost = ($overageTokens / 1000) * $this->planPolicyService->overagePricePer1000Tokens($plan);
+
+        return [
+            'extra_requests_cost' => round($extraRequestsCost, 2),
+            'extra_tokens_cost' => round($extraTokensCost, 2),
+            'total_overage_monthly' => round($extraRequestsCost + $extraTokensCost, 2),
+        ];
     }
 }

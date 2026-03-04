@@ -36,6 +36,7 @@
                     </form>
                 @else
                     <a class="btn btn-ui btn-primary-ui btn-sm" href="{{ route('login') }}">Acceso</a>
+                    <a class="btn btn-ui btn-outline-ui btn-sm" href="{{ route('register') }}">Crear cuenta</a>
                 @endauth
             </div>
         </div>

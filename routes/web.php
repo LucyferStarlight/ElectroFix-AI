@@ -2,10 +2,14 @@
 
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\SubscriptionController;
+use App\Http\Controllers\Admin\TechnicianController;
 use App\Http\Controllers\Admin\WorkerController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
+use App\Http\Controllers\Developer\DeveloperSubscriptionController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
 use App\Http\Controllers\Worker\BillingController;
@@ -17,11 +21,15 @@ Route::view('/', 'landing')->name('landing');
 Route::view('/terms-and-conditions', 'terms')->name('terms');
 Route::get('/login', [AuthController::class, 'showLoginForm'])->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login.store');
+Route::get('/register', [RegistrationController::class, 'showForm'])->middleware('guest')->name('register');
+Route::post('/register', [RegistrationController::class, 'store'])->middleware('guest')->name('register.store');
+Route::get('/register/confirmation/{token}', [RegistrationController::class, 'confirmation'])->middleware('guest')->name('register.confirmation');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
-Route::middleware('auth')->group(function (): void {
+Route::middleware(['auth', 'subscription_active'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::middleware('role:worker,admin,developer')->group(function (): void {
@@ -77,8 +85,14 @@ Route::middleware('auth')->group(function (): void {
         Route::put('/admin/workers/{user}', [WorkerController::class, 'update'])->name('admin.workers.update');
         Route::patch('/admin/workers/{user}/deactivate', [WorkerController::class, 'deactivate'])->name('admin.workers.deactivate');
         Route::delete('/admin/workers/{user}', [WorkerController::class, 'destroy'])->name('admin.workers.destroy');
+        Route::get('/admin/technicians', [TechnicianController::class, 'index'])->name('admin.technicians.index');
+        Route::post('/admin/technicians', [TechnicianController::class, 'store'])->name('admin.technicians.store');
+        Route::put('/admin/technicians/{technician}', [TechnicianController::class, 'update'])->name('admin.technicians.update');
+        Route::patch('/admin/technicians/{technician}/deactivate', [TechnicianController::class, 'deactivate'])->name('admin.technicians.deactivate');
         Route::get('/admin/subscription', [SubscriptionController::class, 'edit'])->name('admin.subscription.edit');
-        Route::put('/admin/subscription', [SubscriptionController::class, 'update'])->name('admin.subscription.update');
+        Route::post('/billing/subscription/checkout', [SubscriptionController::class, 'checkout'])->name('admin.subscription.checkout');
+        Route::post('/billing/subscription/change', [SubscriptionController::class, 'change'])->name('admin.subscription.change');
+        Route::post('/billing/subscription/cancel', [SubscriptionController::class, 'cancel'])->name('admin.subscription.cancel');
     });
 
     Route::middleware('role:developer')->group(function (): void {
@@ -87,5 +101,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/developer/companies/{company}', [CompanyInsightsController::class, 'show'])->name('developer.companies.show');
         Route::get('/developer/subscriptions', [CompanyInsightsController::class, 'subscriptions'])->name('developer.subscriptions');
         Route::get('/developer/test-company', [CompanyInsightsController::class, 'testCompany'])->name('developer.test-company');
+        Route::post('/developer/companies/{company}/assign-developer-test', [DeveloperSubscriptionController::class, 'assignDeveloperTest'])
+            ->name('developer.subscriptions.assign-devtest');
     });
 });

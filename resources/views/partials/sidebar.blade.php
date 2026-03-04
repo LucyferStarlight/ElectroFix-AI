@@ -37,6 +37,7 @@
                 <p class="sidebar-section mt-4">Administración</p>
                 <a class="sidebar-link {{ request()->routeIs('dashboard.admin') ? 'active' : '' }}" href="{{ route('dashboard.admin') }}">Panel Admin</a>
                 <a class="sidebar-link {{ request()->routeIs('admin.workers.*') ? 'active' : '' }}" href="{{ route('admin.workers.index') }}">Trabajadores</a>
+                <a class="sidebar-link {{ request()->routeIs('admin.technicians.*') ? 'active' : '' }}" href="{{ route('admin.technicians.index') }}">Técnicos</a>
                 <a class="sidebar-link {{ request()->routeIs('admin.company.*') ? 'active' : '' }}" href="{{ route('admin.company.edit') }}">Datos Empresa</a>
                 <a class="sidebar-link {{ request()->routeIs('admin.subscription.*') ? 'active' : '' }}" href="{{ route('admin.subscription.edit') }}">Suscripción</a>
             @endif

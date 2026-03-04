@@ -8,11 +8,17 @@ use App\Models\Equipment;
 use App\Models\Order;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\DashboardMetricsService;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
+    public function __construct(private readonly DashboardMetricsService $dashboardMetricsService)
+    {
+    }
+
     public function index(Request $request): RedirectResponse
     {
         return match ($request->user()->role) {
@@ -30,7 +36,11 @@ class DashboardController extends Controller
 
         $delegatedOrdersQuery = Order::query()
             ->where('company_id', $company->id)
-            ->where('technician', $user->name);
+            ->when(
+                $user->technicianProfile,
+                fn ($query) => $query->where('technician_profile_id', $user->technicianProfile->id),
+                fn ($query) => $query->where('technician', $user->name)
+            );
 
         $stats = [
             'orders' => $delegatedOrdersQuery->count(),
@@ -41,7 +51,11 @@ class DashboardController extends Controller
         $delegatedOrders = Order::query()
             ->with(['customer', 'equipment'])
             ->where('company_id', $company->id)
-            ->where('technician', $user->name)
+            ->when(
+                $user->technicianProfile,
+                fn ($query) => $query->where('technician_profile_id', $user->technicianProfile->id),
+                fn ($query) => $query->where('technician', $user->name)
+            )
             ->latest('created_at')
             ->limit(10)
             ->get();
@@ -59,6 +73,20 @@ class DashboardController extends Controller
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = isset($validated['from'])
+            ? Carbon::parse($validated['from'])->startOfDay()
+            : now()->startOfMonth()->startOfDay();
+        $to = isset($validated['to'])
+            ? Carbon::parse($validated['to'])->endOfDay()
+            : now()->endOfDay();
+
+        $metrics = $this->dashboardMetricsService->companyMetrics($company, $from, $to);
+
         $workersCount = User::query()
             ->where('company_id', $company?->id)
             ->where('role', 'worker')
@@ -69,6 +97,11 @@ class DashboardController extends Controller
             'company' => $company,
             'workersCount' => $workersCount,
             'subscription' => $company?->subscription,
+            'metrics' => $metrics,
+            'range' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
         ]);
     }
 

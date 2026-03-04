@@ -41,6 +41,7 @@
                     <div class="mt-4 pt-3 border-top">
                         <p class="mb-1 small text-muted">Credenciales demo: <code>admin@electrofix.ai</code>, <code>worker@electrofix.ai</code>, <code>developer@electrofix.ai</code></p>
                         <p class="mb-1 small text-muted">Password común: <code>password123</code></p>
+                        <a href="{{ route('register') }}" class="small link-ui d-inline-block me-3">Crear cuenta</a>
                         <a href="{{ route('landing') }}" class="small link-ui">Volver a landing</a>
                     </div>
                 </div>

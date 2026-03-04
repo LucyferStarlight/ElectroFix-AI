@@ -8,7 +8,7 @@ use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\Order;
-use App\Models\User;
+use App\Models\TechnicianProfile;
 use App\Services\AiPlanPolicyService;
 use App\Services\AiUsageService;
 use App\Services\OrderCreationService;
@@ -36,12 +36,13 @@ class OrderController extends Controller
             $customers->where('company_id', $companyId);
             $equipments->where('company_id', $companyId);
 
-            $companyTechnicians = User::query()
+            $companyTechnicians = TechnicianProfile::query()
                 ->where('company_id', $companyId)
-                ->whereIn('role', ['worker', 'admin'])
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'role']);
+                ->where('is_assignable', true)
+                ->whereIn('status', ['available', 'assigned'])
+                ->with('user:id,role')
+                ->orderBy('display_name')
+                ->get(['id', 'display_name', 'user_id', 'status']);
         }
 
         $plan = (string) ($user?->company?->subscription?->plan ?? 'starter');
@@ -54,6 +55,9 @@ class OrderController extends Controller
             $orders->where(function ($q) use ($search): void {
                 $q->where('id', $search)
                     ->orWhere('technician', 'like', "%{$search}%")
+                    ->orWhereHas('technicianProfile', function ($tq) use ($search): void {
+                        $tq->where('display_name', 'like', "%{$search}%");
+                    })
                     ->orWhereHas('customer', function ($cq) use ($search): void {
                         $cq->where('name', 'like', "%{$search}%");
                     })

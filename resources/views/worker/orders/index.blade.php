@@ -187,17 +187,20 @@
                                 <div class="col-md-6">
                                     <label class="form-label">Técnico asignado *</label>
                                     @if(auth()->user()->role === 'admin')
-                                        <select class="form-select input-ui" name="technician_user_id" required>
+                                        <select class="form-select input-ui" name="technician_profile_id" required>
                                             <option value="">Seleccionar técnico...</option>
                                             @foreach($companyTechnicians as $technician)
                                                 <option value="{{ $technician->id }}">
-                                                    {{ $technician->name }} ({{ strtoupper($technician->role) }})
+                                                    {{ $technician->display_name }}
+                                                    ({{ strtoupper($technician->user?->role ?? 'tecnico') }} / {{ strtoupper($technician->status) }})
                                                 </option>
                                             @endforeach
                                         </select>
                                     @elseif(auth()->user()->role === 'worker')
                                         <input class="form-control input-ui" value="{{ auth()->user()->name }}" readonly>
-                                        <input type="hidden" name="technician" value="{{ auth()->user()->name }}">
+                                        @if(auth()->user()->technicianProfile)
+                                            <input type="hidden" name="technician_profile_id" value="{{ auth()->user()->technicianProfile->id }}">
+                                        @endif
                                     @else
                                         <input class="form-control input-ui" name="technician" required>
                                     @endif

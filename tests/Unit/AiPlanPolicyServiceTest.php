@@ -16,7 +16,7 @@ class AiPlanPolicyServiceTest extends TestCase
         $this->assertFalse($service->supportsAi('starter'));
 
         $this->assertSame(200, $service->queryLimit('enterprise'));
-        $this->assertSame(500, $service->queryLimit('developer_test'));
+        $this->assertSame(300, $service->queryLimit('developer_test'));
         $this->assertSame(0, $service->queryLimit('starter'));
 
         $this->assertSame(120000, $service->tokenLimit('enterprise'));
@@ -24,4 +24,3 @@ class AiPlanPolicyServiceTest extends TestCase
         $this->assertSame(0, $service->tokenLimit('starter'));
     }
 }
-

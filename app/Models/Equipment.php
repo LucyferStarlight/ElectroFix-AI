@@ -36,4 +36,9 @@ class Equipment extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(EquipmentEvent::class);
+    }
 }

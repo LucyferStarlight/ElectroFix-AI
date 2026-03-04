@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -16,6 +17,7 @@ class Order extends Model
         'customer_id',
         'equipment_id',
         'technician',
+        'technician_profile_id',
         'symptoms',
         'status',
         'estimated_cost',
@@ -70,5 +72,30 @@ class Order extends Model
     public function aiUsages(): HasMany
     {
         return $this->hasMany(CompanyAiUsage::class);
+    }
+
+    public function technicianProfile(): BelongsTo
+    {
+        return $this->belongsTo(TechnicianProfile::class, 'technician_profile_id');
+    }
+
+    public function diagnostics(): HasMany
+    {
+        return $this->hasMany(OrderDiagnostic::class);
+    }
+
+    public function latestDiagnostic(): HasOne
+    {
+        return $this->hasOne(OrderDiagnostic::class)->latestOfMany('version');
+    }
+
+    public function assignmentLogs(): HasMany
+    {
+        return $this->hasMany(OrderAssignmentLog::class);
+    }
+
+    public function equipmentEvents(): HasMany
+    {
+        return $this->hasMany(EquipmentEvent::class);
     }
 }

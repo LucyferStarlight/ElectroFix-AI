@@ -54,11 +54,23 @@ class AiDiagnosticService
 
         return [
             'equipment' => trim($brand.' '.$type.' '.($model ?? '')),
+            'diagnostic_summary' => $requiresPartsReplacement
+                ? 'Se detecta escenario de reparación con posible reemplazo de componentes.'
+                : 'Se detecta escenario de reparación sin necesidad inicial de reemplazo de piezas.',
             'potential_causes' => array_values(array_unique($causes)),
+            'possible_causes' => array_values(array_unique($causes)),
+            'recommended_actions' => [
+                'Inspección eléctrica inicial',
+                $requiresPartsReplacement ? 'Validar estado de piezas críticas para reemplazo' : 'Ajuste y calibración de componentes actuales',
+                'Prueba funcional completa antes de entrega',
+            ],
             'estimated_time' => $time,
             'suggested_parts' => $parts,
             'technical_advice' => $advice,
             'requires_parts_replacement' => $requiresPartsReplacement,
+            'confidence_score' => $requiresPartsReplacement ? 82.5 : 74.0,
+            'provider' => 'local_stub',
+            'model' => 'heuristic-v2',
             'cost_suggestion' => [
                 'repair_labor_cost' => round($repairLaborCost, 2),
                 'replacement_parts_cost' => round($replacementPartsCost, 2),

@@ -6,9 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Laravel\Cashier\Billable;
 
 class Company extends Model
 {
+    use Billable;
     use HasFactory;
 
     protected $fillable = [
@@ -26,6 +28,10 @@ class Company extends Model
         'postal_code',
         'currency',
         'vat_percentage',
+        'stripe_id',
+        'pm_type',
+        'pm_last_four',
+        'trial_ends_at',
         'notes',
     ];
 
@@ -33,6 +39,7 @@ class Company extends Model
     {
         return [
             'vat_percentage' => 'decimal:2',
+            'trial_ends_at' => 'datetime',
         ];
     }
 
@@ -44,6 +51,16 @@ class Company extends Model
     public function subscription(): HasOne
     {
         return $this->hasOne(Subscription::class);
+    }
+
+    public function stripeName(): string
+    {
+        return $this->owner_name ?: $this->name;
+    }
+
+    public function stripeEmail(): ?string
+    {
+        return $this->billing_email ?: $this->owner_email;
     }
 
     public function customers(): HasMany
@@ -79,5 +96,35 @@ class Company extends Model
     public function aiUsages(): HasMany
     {
         return $this->hasMany(CompanyAiUsage::class);
+    }
+
+    public function aiUsageSummary(): HasOne
+    {
+        return $this->hasOne(AiUsage::class);
+    }
+
+    public function technicianProfiles(): HasMany
+    {
+        return $this->hasMany(TechnicianProfile::class);
+    }
+
+    public function equipmentEvents(): HasMany
+    {
+        return $this->hasMany(EquipmentEvent::class);
+    }
+
+    public function orderDiagnostics(): HasMany
+    {
+        return $this->hasMany(OrderDiagnostic::class);
+    }
+
+    public function orderAssignmentLogs(): HasMany
+    {
+        return $this->hasMany(OrderAssignmentLog::class);
+    }
+
+    public function subscriptionChangeRequests(): HasMany
+    {
+        return $this->hasMany(SubscriptionChangeRequest::class);
     }
 }

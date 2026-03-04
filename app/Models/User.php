@@ -9,12 +9,14 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Builder;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -71,6 +73,11 @@ class User extends Authenticatable
     public function billingDocuments(): HasMany
     {
         return $this->hasMany(BillingDocument::class);
+    }
+
+    public function technicianProfile(): HasOne
+    {
+        return $this->hasOne(TechnicianProfile::class);
     }
 
     public function isRole(string $role): bool

@@ -38,6 +38,22 @@ class AuthController extends Controller
                 ->onlyInput('email');
         }
 
+        $user = $request->user();
+        if ($user->role !== 'developer' && $user->role !== 'admin') {
+            $status = $user->company?->subscription?->status;
+            if (! in_array($status, ['active', 'trial'], true)) {
+                Auth::logout();
+
+                $message = $user->role === 'worker'
+                    ? 'El acceso ha sido suspendido por un tema administrativo. Por favor, informa a tu empleador.'
+                    : 'Tu suscripción no está vigente. Actualiza tu pago para recuperar el acceso.';
+
+                return back()
+                    ->withErrors(['email' => $message])
+                    ->onlyInput('email');
+            }
+        }
+
         $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard'));
