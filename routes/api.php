@@ -8,9 +8,19 @@ use App\Http\Controllers\Api\V1\EquipmentApiController;
 use App\Http\Controllers\Api\V1\InventoryItemApiController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\ProfileApiController;
+use App\Http\Controllers\Api\Billing\StripeController;
 use App\Http\Controllers\Api\V1\SubscriptionApiController;
 use App\Support\ApiAbility;
 use Illuminate\Support\Facades\Route;
+
+
+Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook']);
+
+Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::post('/billing/stripe/checkout', [StripeController::class, 'checkout']);
+    Route::post('/billing/stripe/change', [StripeController::class, 'change']);
+    Route::post('/billing/stripe/cancel', [StripeController::class, 'cancel']);
+});
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/tokens', [AuthTokenController::class, 'store']);
