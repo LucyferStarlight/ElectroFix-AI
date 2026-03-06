@@ -131,3 +131,70 @@ git push origin <tu-rama>
 ## Licencia
 Este proyecto no se distribuye bajo MIT para uso final del producto.
 Revisar [LICENSE](LICENSE) para términos de uso autorizados.
+
+
+## Stripe en local (sin fallos)
+Para que la integración de suscripciones funcione de forma estable en local, valida este checklist:
+
+1. **Dependencias y extensiones PHP**
+   - Instalar dependencias:
+     ```bash
+     composer install
+     ```
+   - Verificar extensiones mínimas: `pdo_mysql` (o `pdo_sqlite`), `mbstring`, `openssl`, `json`, `curl`.
+
+2. **Variables de entorno en `.env` (modo TEST)**
+   - Copiar base:
+     ```bash
+     cp .env.example .env
+     php artisan key:generate
+     ```
+   - Completar Stripe:
+     ```env
+     STRIPE_KEY=pk_test_xxx
+     STRIPE_SECRET=sk_test_xxx
+     STRIPE_WEBHOOK_SECRET=whsec_xxx
+     ```
+   - Definir los Price IDs (puedes usar cualquiera de los dos formatos):
+     - Formato largo: `STRIPE_PRICE_STARTER_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL`, etc.
+     - Formato corto: `STARTER_MONTHLY`, `PRO_ANNUAL`, `ENTERPRISE_SEMIANNUAL`, etc.
+
+3. **Base de datos inicializada**
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
+
+4. **Levantar app local**
+   ```bash
+   php artisan serve
+   ```
+
+5. **Exponer webhook de Stripe**
+   - Opción A (Stripe CLI):
+     ```bash
+     stripe listen --forward-to http://127.0.0.1:8000/api/billing/stripe/webhook
+     ```
+     Copia el `whsec_...` entregado por Stripe CLI a `STRIPE_WEBHOOK_SECRET`.
+   - Opción B (ngrok):
+     ```bash
+     ngrok http 8000
+     ```
+     Luego configura Stripe para enviar webhooks a:
+     `https://TU_SUBDOMINIO.ngrok.io/api/billing/stripe/webhook`
+
+6. **Eventos requeridos en Stripe Dashboard / CLI**
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_succeeded`
+   - `invoice.payment_failed`
+
+7. **Smoke checks recomendados**
+   ```bash
+   php -l app/Http/Controllers/Api/Billing/StripeController.php
+   php -l app/Services/StripeWebhookService.php
+   php artisan route:list --path=billing/stripe
+   ```
+
+> Nota: aunque recibas credenciales `pk_live` / `sk_live`, para pruebas locales seguras se recomienda usar siempre claves `pk_test` / `sk_test`.

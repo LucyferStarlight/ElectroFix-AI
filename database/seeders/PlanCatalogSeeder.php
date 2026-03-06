@@ -41,8 +41,8 @@ class PlanCatalogSeeder extends Seeder
                 'overage_enabled' => true,
                 'overage_price_per_request' => 2.50,
                 'overage_price_per_1000_tokens' => 0.45,
-                'stripe_overage_requests_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_REQUESTS_PRICE_ID'),
-                'stripe_overage_tokens_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_TOKENS_PRICE_ID'),
+                'stripe_overage_requests_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_REQUESTS_PRICE_ID') ?: env('stripe_overage_requests_price_id'),
+                'stripe_overage_tokens_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_TOKENS_PRICE_ID') ?: env('stripe_overage_tokens_price_id'),
             ],
             [
                 'name' => 'developer_test',
@@ -70,8 +70,7 @@ class PlanCatalogSeeder extends Seeder
             ];
 
             foreach ($prices as $price) {
-                $envKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $plan->name, $price['billing_period']));
-                $priceId = (string) env($envKey, sprintf('price_placeholder_%s_%s', $plan->name, $price['billing_period']));
+                $priceId = $this->resolvePriceId($plan->name, $price['billing_period']);
 
                 PlanPrice::query()->updateOrCreate(
                     ['plan_id' => $plan->id, 'billing_period' => $price['billing_period'], 'currency' => 'mxn'],
@@ -92,5 +91,16 @@ class PlanCatalogSeeder extends Seeder
                 ->whereNull('plan_id')
                 ->update(['plan_id' => $id]);
         }
+    }
+
+    /**
+     * Admite tanto STRIPE_PRICE_* como formato corto STARTER_MONTHLY.
+     */
+    private function resolvePriceId(string $planName, string $period): string
+    {
+        $legacyKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $planName, $period));
+        $shortKey = strtoupper(sprintf('%s_%s', $planName, $period));
+
+        return (string) (env($legacyKey) ?: env($shortKey) ?: sprintf('price_placeholder_%s_%s', $planName, $period));
     }
 }

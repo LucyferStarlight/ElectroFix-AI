@@ -23,8 +23,9 @@ class PlanPricesSeeder extends Seeder
             }
 
             foreach ($periods as $period => $trialDays) {
-                $envKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $planName, $period));
-                $priceId = (string) env($envKey, sprintf('price_placeholder_%s_%s', $planName, $period));
+                $legacyKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $planName, $period));
+                $shortKey = strtoupper(sprintf('%s_%s', $planName, $period));
+                $priceId = (string) (env($legacyKey) ?: env($shortKey) ?: sprintf('price_placeholder_%s_%s', $planName, $period));
 
                 PlanPrice::query()->updateOrCreate(
                     [
@@ -42,4 +43,3 @@ class PlanPricesSeeder extends Seeder
         }
     }
 }
-
