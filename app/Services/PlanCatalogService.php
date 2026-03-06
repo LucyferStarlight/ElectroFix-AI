@@ -21,12 +21,21 @@ class PlanCatalogService
         return Plan::query()->where('name', $name)->firstOrFail();
     }
 
-    public function resolvePrice(string $planName, string $billingPeriod): PlanPrice
+    public function resolvePrice(string $planName, string $billingPeriod, string $currency = 'mxn'): PlanPrice
     {
-        return PlanPrice::query()
+        $currency = strtolower(trim($currency)) ?: 'mxn';
+
+        $query = PlanPrice::query()
             ->whereHas('plan', fn ($q) => $q->where('name', $planName))
             ->where('billing_period', $billingPeriod)
-            ->where('is_active', true)
-            ->firstOrFail();
+            ->where('is_active', true);
+
+        $price = $query->where('currency', $currency)->first();
+
+        if ($price) {
+            return $price;
+        }
+
+        return $query->where('currency', 'mxn')->firstOrFail();
     }
 }

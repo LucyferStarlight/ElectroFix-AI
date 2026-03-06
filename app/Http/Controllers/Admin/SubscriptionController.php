@@ -21,6 +21,7 @@ class SubscriptionController extends Controller
 
     public function edit(Request $request)
     {
+        $this->assertNoCrossCompanyInput($request);
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
@@ -41,6 +42,7 @@ class SubscriptionController extends Controller
 
     public function checkout(StoreSubscriptionCheckoutRequest $request): RedirectResponse
     {
+        $this->assertNoCrossCompanyInput($request);
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
@@ -56,6 +58,7 @@ class SubscriptionController extends Controller
 
     public function change(StoreSubscriptionChangeRequest $request): RedirectResponse
     {
+        $this->assertNoCrossCompanyInput($request);
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
@@ -75,11 +78,24 @@ class SubscriptionController extends Controller
 
     public function cancel(Request $request): RedirectResponse
     {
+        $this->assertNoCrossCompanyInput($request);
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
         $this->companySubscriptionService->cancelAtPeriodEnd($company);
 
         return back()->with('success', 'La suscripción fue marcada para cancelarse al final del periodo pagado.');
+    }
+
+    private function assertNoCrossCompanyInput(Request $request): void
+    {
+        if (! $request->has('company_id')) {
+            return;
+        }
+
+        $companyId = (int) $request->input('company_id');
+        if ($companyId !== (int) $request->user()?->company_id) {
+            abort(403, 'No puedes operar la suscripción de otra empresa.');
+        }
     }
 }

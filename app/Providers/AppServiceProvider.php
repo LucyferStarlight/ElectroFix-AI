@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Application\AI\Contracts\AiProviderInterface;
+use App\Infrastructure\AI\GeminiProvider;
 use App\Models\Company;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Cashier\Cashier;
@@ -13,7 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(AiProviderInterface::class, GeminiProvider::class);
     }
 
     /**

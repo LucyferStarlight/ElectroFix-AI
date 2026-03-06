@@ -74,11 +74,12 @@ class PlanCatalogSeeder extends Seeder
                 $priceId = (string) env($envKey, sprintf('price_placeholder_%s_%s', $plan->name, $price['billing_period']));
 
                 PlanPrice::query()->updateOrCreate(
-                    ['plan_id' => $plan->id, 'billing_period' => $price['billing_period']],
+                    ['plan_id' => $plan->id, 'billing_period' => $price['billing_period'], 'currency' => 'mxn'],
                     [
                         'stripe_price_id' => $priceId,
                         'trial_days' => $price['trial_days'],
                         'is_active' => true,
+                        'currency' => 'mxn',
                     ]
                 );
             }

@@ -142,15 +142,45 @@ class OrderApiController extends Controller
             (string) $order->equipment?->type,
             (string) $order->equipment?->brand,
             $order->equipment?->model,
-            $symptoms
+            $symptoms,
+            ['company_id' => $company->id, 'order_id' => $order->id]
         );
+
+        if (($analysis['success'] ?? true) === false) {
+            $message = (string) ($analysis['error_message'] ?? 'No fue posible completar el diagnóstico IA en este momento.');
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                'error',
+                $message,
+                $promptChars
+            );
+
+            return response()->json([
+                'ok' => false,
+                'data' => null,
+                'meta' => [],
+                'error' => [
+                    'code' => 'AI_PROVIDER_ERROR',
+                    'message' => $message,
+                ],
+            ], 422);
+        }
 
         $completionChars = mb_strlen((string) json_encode($analysis, JSON_UNESCAPED_UNICODE));
         $completionTokens = $this->aiTokenEstimator->estimateFromChars($completionChars);
         $totalTokens = $promptTokens + $completionTokens;
 
         try {
-            $this->aiUsageService->validateAfterUsage($company, $plan, $totalTokens);
+            $this->aiUsageService->commitSuccessfulUsage(
+                $company,
+                $order,
+                $plan,
+                $promptChars,
+                $completionChars,
+                $totalTokens
+            );
         } catch (AiUsageException $exception) {
             $this->aiUsageService->registerBlocked(
                 $company,
@@ -198,9 +228,6 @@ class OrderApiController extends Controller
             'ai_cost_replacement_total' => (float) ($analysis['cost_suggestion']['replacement_total_cost'] ?? 0),
         ]);
 
-        $this->aiUsageService->registerSuccess($company, $order, $plan, $promptChars, $completionChars);
-
         return $this->successResource(new OrderDiagnosticResource($diagnostic), status: 201);
     }
 }
-

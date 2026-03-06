@@ -94,8 +94,8 @@ class RegistrationService
                 default => now()->addMonthNoOverflow(),
             };
 
-            $payment = ['attempt_no' => null, 'result' => 'trial'];
-            $status = 'trial';
+            $payment = ['attempt_no' => null, 'result' => 'trialing'];
+            $status = 'trialing';
             if (! $trialEnabled) {
                 $payment = $this->paymentSimulationService->nextResult();
                 $status = $payment['result'] === 'approved' ? 'active' : 'past_due';

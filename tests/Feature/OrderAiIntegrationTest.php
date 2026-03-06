@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiUsage;
 use App\Models\Company;
-use App\Models\CompanyAiUsage;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\Subscription;
@@ -79,23 +79,16 @@ class OrderAiIntegrationTest extends TestCase
 
     public function test_order_ai_is_blocked_when_query_limit_is_reached(): void
     {
-        [$worker, $customer, $equipment, $company] = $this->makeContext('enterprise');
-
-        for ($i = 0; $i < 200; $i++) {
-            CompanyAiUsage::query()->create([
-                'company_id' => $company->id,
-                'order_id' => null,
-                'year_month' => now()->format('Y-m'),
-                'plan_snapshot' => 'enterprise',
-                'prompt_chars' => 100,
-                'response_chars' => 100,
-                'prompt_tokens_estimated' => 25,
-                'response_tokens_estimated' => 25,
-                'total_tokens_estimated' => 50,
-                'status' => 'success',
-                'error_message' => null,
-            ]);
-        }
+        [$worker, $customer, $equipment, $company] = $this->makeContext('pro');
+        AiUsage::query()->create([
+            'company_id' => $company->id,
+            'ai_requests_used' => 80,
+            'ai_tokens_used' => 500,
+            'current_cycle_start' => now()->startOfMonth()->toDateString(),
+            'current_cycle_end' => now()->endOfMonth()->toDateString(),
+            'overage_requests' => 0,
+            'overage_tokens' => 0,
+        ]);
 
         $this->actingAs($worker)
             ->post(route('worker.orders.store'), [
@@ -113,20 +106,15 @@ class OrderAiIntegrationTest extends TestCase
 
     public function test_order_ai_is_blocked_when_token_limit_is_reached(): void
     {
-        [$worker, $customer, $equipment, $company] = $this->makeContext('enterprise');
-
-        CompanyAiUsage::query()->create([
+        [$worker, $customer, $equipment, $company] = $this->makeContext('pro');
+        AiUsage::query()->create([
             'company_id' => $company->id,
-            'order_id' => null,
-            'year_month' => now()->format('Y-m'),
-            'plan_snapshot' => 'enterprise',
-            'prompt_chars' => 0,
-            'response_chars' => 0,
-            'prompt_tokens_estimated' => 0,
-            'response_tokens_estimated' => 0,
-            'total_tokens_estimated' => 119990,
-            'status' => 'success',
-            'error_message' => null,
+            'ai_requests_used' => 10,
+            'ai_tokens_used' => 49990,
+            'current_cycle_start' => now()->startOfMonth()->toDateString(),
+            'current_cycle_end' => now()->endOfMonth()->toDateString(),
+            'overage_requests' => 0,
+            'overage_tokens' => 0,
         ]);
 
         $this->actingAs($worker)
@@ -192,4 +180,3 @@ class OrderAiIntegrationTest extends TestCase
         return [$worker, $customer, $equipment, $company];
     }
 }
-

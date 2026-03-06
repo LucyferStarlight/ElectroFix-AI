@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TechnicianController;
 use App\Http\Controllers\Admin\WorkerController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BillingController as StripeBillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
@@ -12,7 +13,7 @@ use App\Http\Controllers\Developer\DeveloperSubscriptionController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
-use App\Http\Controllers\Worker\BillingController;
+use App\Http\Controllers\Worker\BillingController as WorkerBillingController;
 use App\Http\Controllers\Worker\InventoryController;
 use App\Http\Controllers\Worker\OrderController;
 use Illuminate\Support\Facades\Route;
@@ -59,19 +60,19 @@ Route::middleware(['auth', 'subscription_active'])->group(function (): void {
         Route::delete('/worker/inventory/{item}', [InventoryController::class, 'destroy'])
             ->middleware('module_access:inventory')
             ->name('worker.inventory.destroy');
-        Route::get('/worker/billing', [BillingController::class, 'index'])
+        Route::get('/worker/billing', [WorkerBillingController::class, 'index'])
             ->middleware('module_access:billing')
             ->name('worker.billing');
-        Route::post('/worker/billing', [BillingController::class, 'store'])
+        Route::post('/worker/billing', [WorkerBillingController::class, 'store'])
             ->middleware('module_access:billing')
             ->name('worker.billing.store');
-        Route::get('/worker/billing/customers/{customer}/services', [BillingController::class, 'customerServices'])
+        Route::get('/worker/billing/customers/{customer}/services', [WorkerBillingController::class, 'customerServices'])
             ->middleware('module_access:billing')
             ->name('worker.billing.customer-services');
-        Route::get('/worker/billing/{document}', [BillingController::class, 'show'])
+        Route::get('/worker/billing/{document}', [WorkerBillingController::class, 'show'])
             ->middleware('module_access:billing')
             ->name('worker.billing.show');
-        Route::get('/worker/billing/{document}/pdf', [BillingController::class, 'pdf'])
+        Route::get('/worker/billing/{document}/pdf', [WorkerBillingController::class, 'pdf'])
             ->middleware('module_access:billing')
             ->name('worker.billing.pdf');
     });
@@ -93,6 +94,10 @@ Route::middleware(['auth', 'subscription_active'])->group(function (): void {
         Route::post('/billing/subscription/checkout', [SubscriptionController::class, 'checkout'])->name('admin.subscription.checkout');
         Route::post('/billing/subscription/change', [SubscriptionController::class, 'change'])->name('admin.subscription.change');
         Route::post('/billing/subscription/cancel', [SubscriptionController::class, 'cancel'])->name('admin.subscription.cancel');
+        Route::post('/billing/checkout', [StripeBillingController::class, 'checkout'])->name('billing.checkout');
+        Route::get('/billing/success', [StripeBillingController::class, 'success'])->name('billing.success');
+        Route::get('/billing/cancel', [StripeBillingController::class, 'cancel'])->name('billing.cancel');
+        Route::get('/billing/portal', [StripeBillingController::class, 'portal'])->name('billing.portal');
     });
 
     Route::middleware('role:developer')->group(function (): void {

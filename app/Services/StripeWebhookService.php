@@ -7,6 +7,7 @@ use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StripeWebhookService
 {
@@ -14,6 +15,10 @@ class StripeWebhookService
     {
         $eventId = (string) Arr::get($eventPayload, 'id');
         $eventType = (string) Arr::get($eventPayload, 'type');
+
+        if ($eventId === '' || $eventType === '') {
+            return;
+        }
 
         $stored = StripeWebhookEvent::query()->firstOrCreate(
             ['event_id' => $eventId],
@@ -27,6 +32,18 @@ class StripeWebhookService
         if ($stored->status === 'processed') {
             return;
         }
+
+        // If another process is handling this event and it is still fresh, skip duplicate work.
+        if ($stored->status === 'processing'
+            && $stored->updated_at !== null
+            && $stored->updated_at->gt(now()->subMinutes(5))) {
+            return;
+        }
+
+        $stored->update([
+            'status' => 'processing',
+            'error_message' => null,
+        ]);
 
         try {
             DB::transaction(function () use ($eventPayload, $eventType): void {
@@ -53,7 +70,13 @@ class StripeWebhookService
             $stored->update([
                 'status' => 'error',
                 'processed_at' => now(),
-                'error_message' => $e->getMessage(),
+                'error_message' => mb_substr($e->getMessage(), 0, 240),
+            ]);
+
+            Log::error('Stripe webhook processing failed', [
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'error_message' => mb_substr($e->getMessage(), 0, 240),
             ]);
 
             throw $e;
@@ -96,7 +119,7 @@ class StripeWebhookService
         $cancelAtPeriodEnd = (bool) Arr::get($payload, 'data.object.cancel_at_period_end', false);
 
         $mappedStatus = match ($status) {
-            'trialing' => 'trial',
+            'trialing' => 'trialing',
             'active' => 'active',
             'past_due' => 'past_due',
             'canceled' => 'canceled',

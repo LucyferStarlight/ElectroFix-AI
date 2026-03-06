@@ -2,12 +2,15 @@
 
 namespace Tests\Unit;
 
+use App\Models\AiUsage;
 use App\Models\Company;
-use App\Models\CompanyAiUsage;
-use App\Services\AiPlanPolicyService;
+use App\Services\AiOverageMeteringService;
+use App\Services\AiQuotaGuardService;
 use App\Services\AiTokenEstimator;
+use App\Services\AiUsageCycleService;
 use App\Services\AiUsageService;
 use App\Services\Exceptions\AiUsageException;
+use App\Services\PlanPolicyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,7 +20,7 @@ class AiUsageServiceTest extends TestCase
 
     public function test_it_blocks_when_plan_has_no_ai_access(): void
     {
-        $service = new AiUsageService(new AiPlanPolicyService(), new AiTokenEstimator());
+        $service = $this->makeService();
         $company = Company::factory()->create();
 
         $this->expectException(AiUsageException::class);
@@ -26,56 +29,60 @@ class AiUsageServiceTest extends TestCase
         $service->validateBeforeUsage($company, 'starter', 100);
     }
 
-    public function test_it_blocks_when_monthly_query_limit_is_reached(): void
+    public function test_it_blocks_when_monthly_query_limit_is_reached_for_pro(): void
     {
-        $service = new AiUsageService(new AiPlanPolicyService(), new AiTokenEstimator());
+        $service = $this->makeService();
         $company = Company::factory()->create();
 
-        for ($i = 0; $i < 200; $i++) {
-            CompanyAiUsage::query()->create([
-                'company_id' => $company->id,
-                'order_id' => null,
-                'year_month' => now()->format('Y-m'),
-                'plan_snapshot' => 'enterprise',
-                'prompt_chars' => 100,
-                'response_chars' => 200,
-                'prompt_tokens_estimated' => 25,
-                'response_tokens_estimated' => 50,
-                'total_tokens_estimated' => 75,
-                'status' => 'success',
-                'error_message' => null,
-            ]);
-        }
+        AiUsage::query()->create([
+            'company_id' => $company->id,
+            'ai_requests_used' => 80,
+            'ai_tokens_used' => 1200,
+            'current_cycle_start' => now()->startOfMonth()->toDateString(),
+            'current_cycle_end' => now()->endOfMonth()->toDateString(),
+            'overage_requests' => 0,
+            'overage_tokens' => 0,
+        ]);
 
         $this->expectException(AiUsageException::class);
         $this->expectExceptionMessage('Se alcanzó el límite mensual de consultas IA para tu empresa.');
 
-        $service->validateBeforeUsage($company, 'enterprise', 20);
+        $service->validateBeforeUsage($company, 'pro', 20);
     }
 
-    public function test_it_blocks_when_monthly_token_limit_is_reached(): void
+    public function test_it_blocks_when_monthly_token_limit_is_reached_for_pro(): void
     {
-        $service = new AiUsageService(new AiPlanPolicyService(), new AiTokenEstimator());
+        $service = $this->makeService();
         $company = Company::factory()->create();
 
-        CompanyAiUsage::query()->create([
+        AiUsage::query()->create([
             'company_id' => $company->id,
-            'order_id' => null,
-            'year_month' => now()->format('Y-m'),
-            'plan_snapshot' => 'enterprise',
-            'prompt_chars' => 0,
-            'response_chars' => 0,
-            'prompt_tokens_estimated' => 0,
-            'response_tokens_estimated' => 0,
-            'total_tokens_estimated' => 119950,
-            'status' => 'success',
-            'error_message' => null,
+            'ai_requests_used' => 8,
+            'ai_tokens_used' => 49990,
+            'current_cycle_start' => now()->startOfMonth()->toDateString(),
+            'current_cycle_end' => now()->endOfMonth()->toDateString(),
+            'overage_requests' => 0,
+            'overage_tokens' => 0,
         ]);
 
         $this->expectException(AiUsageException::class);
         $this->expectExceptionMessage('Se alcanzó el límite mensual de consumo IA para tu empresa.');
 
-        $service->validateBeforeUsage($company, 'enterprise', 60);
+        $service->validateBeforeUsage($company, 'pro', 20);
+    }
+
+    private function makeService(): AiUsageService
+    {
+        $quotaGuard = new AiQuotaGuardService(
+            new AiUsageCycleService(),
+            new AiOverageMeteringService()
+        );
+
+        return new AiUsageService(
+            new PlanPolicyService(),
+            new AiTokenEstimator(),
+            $quotaGuard
+        );
     }
 }
 

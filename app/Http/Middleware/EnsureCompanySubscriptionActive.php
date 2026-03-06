@@ -13,6 +13,10 @@ class EnsureCompanySubscriptionActive
         'admin.subscription.checkout',
         'admin.subscription.change',
         'admin.subscription.cancel',
+        'billing.checkout',
+        'billing.success',
+        'billing.cancel',
+        'billing.portal',
         'logout',
     ];
 
@@ -30,7 +34,7 @@ class EnsureCompanySubscriptionActive
             return $this->deny($request, $user->role, 'No existe una suscripción activa para tu empresa.');
         }
 
-        if (in_array($subscription->status, ['active', 'trial'], true)) {
+        if (in_array($subscription->status, ['active', 'trialing'], true)) {
             return $next($request);
         }
 

@@ -34,7 +34,25 @@ class AiUsageService
         }
 
         // Definitive transactional check + increment to avoid race conditions.
-        $this->quotaGuardService->incrementUsage($company, $planModel, $realTotalTokens);
+        $this->quotaGuardService->reserveAndCommitUsage($company, $planModel, $realTotalTokens);
+    }
+
+    public function commitSuccessfulUsage(
+        Company $company,
+        Order $order,
+        string $plan,
+        int $promptChars,
+        int $responseChars,
+        int $realTotalTokens
+    ): CompanyAiUsage {
+        $planModel = $this->planPolicyService->planFor($plan);
+        if (! $planModel || ! $planModel->ai_enabled) {
+            throw new AiUsageException('blocked_plan', 'Tu plan actual no incluye Asistente IA.');
+        }
+
+        $this->quotaGuardService->reserveAndCommitUsage($company, $planModel, $realTotalTokens);
+
+        return $this->registerSuccess($company, $order, $plan, $promptChars, $responseChars);
     }
 
     public function monthlyUsage(Company $company, ?string $yearMonth = null): array

@@ -22,6 +22,7 @@ class SubscriptionApiController extends Controller
 
     public function show(Request $request)
     {
+        $this->assertNoCrossCompanyInput($request);
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
@@ -42,6 +43,7 @@ class SubscriptionApiController extends Controller
         abort_unless($request->user()->role === 'admin', 403, 'No autorizado.');
 
         $data = $request->validate([
+            'company_id' => ['prohibited'],
             'plan' => ['required', Rule::in(['starter', 'pro', 'enterprise'])],
             'billing_period' => ['required', Rule::in(['monthly', 'semiannual', 'annual'])],
             'payment_method' => ['required', 'string', 'max:255'],
@@ -65,6 +67,7 @@ class SubscriptionApiController extends Controller
         abort_unless($request->user()->role === 'admin', 403, 'No autorizado.');
 
         $data = $request->validate([
+            'company_id' => ['prohibited'],
             'plan' => ['required', Rule::in(['starter', 'pro', 'enterprise'])],
             'billing_period' => ['required', Rule::in(['monthly', 'semiannual', 'annual'])],
         ]);
@@ -85,6 +88,7 @@ class SubscriptionApiController extends Controller
     public function cancel(Request $request)
     {
         abort_unless($request->user()->role === 'admin', 403, 'No autorizado.');
+        $this->assertNoCrossCompanyInput($request);
 
         $company = $request->user()->company;
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
@@ -99,5 +103,17 @@ class SubscriptionApiController extends Controller
         return $this->success([
             'plans' => $this->planCatalogService->publicPlans(),
         ]);
+    }
+
+    private function assertNoCrossCompanyInput(Request $request): void
+    {
+        if (! $request->has('company_id')) {
+            return;
+        }
+
+        $companyId = (int) $request->input('company_id');
+        if ($companyId !== (int) $request->user()?->company_id) {
+            abort(403, 'No puedes operar la suscripción de otra empresa.');
+        }
     }
 }

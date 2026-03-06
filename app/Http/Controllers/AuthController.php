@@ -41,7 +41,7 @@ class AuthController extends Controller
         $user = $request->user();
         if ($user->role !== 'developer' && $user->role !== 'admin') {
             $status = $user->company?->subscription?->status;
-            if (! in_array($status, ['active', 'trial'], true)) {
+            if (! in_array($status, ['active', 'trialing'], true)) {
                 Auth::logout();
 
                 $message = $user->role === 'worker'

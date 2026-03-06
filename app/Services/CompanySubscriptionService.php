@@ -17,7 +17,20 @@ class CompanySubscriptionService
 
     public function checkout(Company $company, string $planName, string $billingPeriod, string $paymentMethod): Subscription
     {
-        $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod);
+        if (trim($paymentMethod) === '') {
+            abort(422, 'Debes seleccionar un método de pago válido.');
+        }
+
+        $existingBusiness = $company->subscription;
+        $existingStripe = $company->subscription('default');
+        if ($existingBusiness
+            && in_array($existingBusiness->status, ['active', 'trialing', 'past_due'], true)
+            && $existingStripe
+            && ! $existingStripe->canceled()) {
+            return $existingBusiness;
+        }
+
+        $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod, (string) $company->currency);
         $plan = $price->plan;
 
         $company->createOrGetStripeCustomer();
@@ -40,12 +53,20 @@ class CompanySubscriptionService
             'name' => $company->stripeName(),
         ]);
 
-        return $this->syncBusinessSubscription($company, $plan->name, $billingPeriod, $stripeSubscription->id);
+        $businessStatus = match ($stripeSubscription->stripe_status) {
+            'trialing' => 'trialing',
+            'active' => 'active',
+            'past_due' => 'past_due',
+            'canceled' => 'canceled',
+            default => 'suspended',
+        };
+
+        return $this->syncBusinessSubscription($company, $plan->name, $billingPeriod, $stripeSubscription->id, $businessStatus);
     }
 
     public function requestChange(Company $company, string $planName, string $billingPeriod, User $actor): array
     {
-        $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod);
+        $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod, (string) $company->currency);
         $current = $company->subscription;
 
         if (! $current || ! $current->stripe_subscription_id) {
@@ -83,7 +104,8 @@ class CompanySubscriptionService
             $company,
             $planName,
             $billingPeriod,
-            $stripeSubscription?->stripe_id ?? $current->stripe_subscription_id
+            $stripeSubscription?->stripe_id ?? $current->stripe_subscription_id,
+            $stripeSubscription?->stripe_status === 'trialing' ? 'trialing' : 'active'
         );
 
         return ['mode' => 'immediate', 'subscription' => $updated, 'change' => null];
@@ -121,10 +143,20 @@ class CompanySubscriptionService
         }
 
         $plan = $pending->requestedPlan;
+        $currency = strtolower((string) ($company->currency ?: 'mxn'));
         $price = $plan->prices()
             ->where('billing_period', $pending->requested_billing_period)
             ->where('is_active', true)
+            ->where('currency', $currency)
             ->first();
+
+        if (! $price) {
+            $price = $plan->prices()
+                ->where('billing_period', $pending->requested_billing_period)
+                ->where('is_active', true)
+                ->where('currency', 'mxn')
+                ->first();
+        }
 
         if (! $price) {
             return null;
@@ -149,8 +181,13 @@ class CompanySubscriptionService
         return $company->subscription()->first();
     }
 
-    public function syncBusinessSubscription(Company $company, string $planName, string $billingPeriod, ?string $stripeSubscriptionId): Subscription
-    {
+    public function syncBusinessSubscription(
+        Company $company,
+        string $planName,
+        string $billingPeriod,
+        ?string $stripeSubscriptionId,
+        string $status = 'active'
+    ): Subscription {
         $plan = $this->planCatalogService->resolvePlan($planName);
         $periodEnd = match ($billingPeriod) {
             'semiannual' => now()->addMonthsNoOverflow(6),
@@ -163,7 +200,7 @@ class CompanySubscriptionService
             [
                 'plan' => $planName,
                 'plan_id' => $plan->id,
-                'status' => 'active',
+                'status' => $status,
                 'billing_period' => $billingPeriod,
                 'billing_cycle' => $billingPeriod === 'annual' ? 'yearly' : 'monthly',
                 'stripe_subscription_id' => $stripeSubscriptionId,

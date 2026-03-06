@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\StripeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Webhook;
 
@@ -30,7 +31,17 @@ class StripeWebhookController extends Controller
             return response()->json(['ok' => false, 'message' => 'Firma de webhook inválida.'], 400);
         }
 
-        $this->stripeWebhookService->handle($event->toArray());
+        try {
+            $this->stripeWebhookService->handle($event->toArray());
+        } catch (\Throwable $e) {
+            Log::error('Stripe webhook controller failure', [
+                'event_id' => (string) data_get($event->toArray(), 'id'),
+                'event_type' => (string) data_get($event->toArray(), 'type'),
+                'error_message' => mb_substr($e->getMessage(), 0, 240),
+            ]);
+
+            return response()->json(['ok' => false, 'message' => 'No se pudo procesar el webhook.'], 500);
+        }
 
         return response()->json(['ok' => true]);
     }

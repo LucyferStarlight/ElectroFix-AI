@@ -64,6 +64,33 @@
                             <button class="btn btn-ui btn-primary-ui" type="submit">Crear suscripción</button>
                         </div>
                     </form>
+
+                    <hr class="my-4">
+
+                    <h3 class="h6 fw-bold mb-3">Checkout seguro (Stripe Hosted)</h3>
+                    <form method="post" action="{{ route('billing.checkout') }}" class="row g-3">
+                        @csrf
+                        <div class="col-12">
+                            <label class="form-label">Plan público</label>
+                            <select class="form-select input-ui" name="plan" required>
+                                <option value="">Selecciona plan...</option>
+                                @foreach($plans as $plan)
+                                    <option value="{{ $plan->name }}">{{ strtoupper($plan->name) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Periodo</label>
+                            <select class="form-select input-ui" name="billing_period" required>
+                                <option value="monthly">Mensual (7 días trial)</option>
+                                <option value="semiannual">Semestral (15 días trial)</option>
+                                <option value="annual">Anual (15 días trial)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-ui btn-outline-ui" type="submit">Ir a Checkout Stripe</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -100,6 +127,12 @@
                         @csrf
                         <button class="btn btn-ui btn-danger" type="submit">Cancelar al final del periodo</button>
                     </form>
+
+                    <hr class="my-4">
+
+                    <h3 class="h6 fw-bold mb-2">Portal de facturación Stripe</h3>
+                    <p class="text-muted small mb-3">Gestiona método de pago, historial de facturas y cancelación desde el portal seguro de Stripe.</p>
+                    <a href="{{ route('billing.portal') }}" class="btn btn-ui btn-outline-ui">Abrir portal Stripe</a>
                 </div>
             </div>
         </div>

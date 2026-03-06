@@ -1,0 +1,35 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasTable('company_subscriptions')) {
+            return;
+        }
+
+        DB::statement(
+            "ALTER TABLE company_subscriptions
+             MODIFY status ENUM('active','trialing','past_due','canceled','suspended')
+             NOT NULL DEFAULT 'trialing'"
+        );
+    }
+
+    public function down(): void
+    {
+        if (! Schema::hasTable('company_subscriptions')) {
+            return;
+        }
+
+        DB::statement(
+            "ALTER TABLE company_subscriptions
+             MODIFY status ENUM('active','trial','trialing','past_due','canceled','suspended')
+             NOT NULL DEFAULT 'trialing'"
+        );
+    }
+};
+

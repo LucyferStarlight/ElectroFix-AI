@@ -44,10 +44,30 @@ class PlanPolicyService
     public function planFor(string $planName): ?Plan
     {
         try {
-            return Plan::query()->where('name', $planName)->first();
+            $plan = Plan::query()->where('name', $planName)->first();
+            if ($plan) {
+                return $plan;
+            }
         } catch (\Throwable $e) {
+            // Continue with fallback defaults.
+        }
+
+        if (! array_key_exists($planName, self::DEFAULTS)) {
             return null;
         }
+
+        $defaults = self::DEFAULTS[$planName];
+
+        return new Plan([
+            'name' => $planName,
+            'is_public' => $planName !== 'developer_test',
+            'ai_enabled' => $defaults['ai_enabled'],
+            'max_ai_requests' => $defaults['max_ai_requests'],
+            'max_ai_tokens' => $defaults['max_ai_tokens'],
+            'overage_enabled' => $defaults['overage_enabled'],
+            'overage_price_per_request' => $defaults['overage_price_per_request'],
+            'overage_price_per_1000_tokens' => $defaults['overage_price_per_1000_tokens'],
+        ]);
     }
 
     private function effective(string $planName): array

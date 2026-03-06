@@ -69,15 +69,40 @@ class AiQuotaGuardService
         }
     }
 
-    public function incrementUsage(Company $company, Plan $plan, int $tokensUsed): array
+    public function reserveAndCommitUsage(Company $company, Plan $plan, int $tokensUsed): array
     {
         return DB::transaction(function () use ($company, $plan, $tokensUsed): array {
-            $this->ensureUsageRow($company);
+            $cycle = $this->cycleService->currentCycle($company);
 
             $usage = AiUsage::query()
                 ->where('company_id', $company->id)
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+
+            if (! $usage) {
+                $usage = AiUsage::query()->create([
+                    'company_id' => $company->id,
+                    'current_cycle_start' => $cycle['start']->toDateString(),
+                    'current_cycle_end' => $cycle['end']->toDateString(),
+                    'ai_requests_used' => 0,
+                    'ai_tokens_used' => 0,
+                    'overage_requests' => 0,
+                    'overage_tokens' => 0,
+                ]);
+            }
+
+            if ($usage->current_cycle_start->toDateString() !== $cycle['start']->toDateString()
+                || $usage->current_cycle_end->toDateString() !== $cycle['end']->toDateString()) {
+                $usage->update([
+                    'ai_requests_used' => 0,
+                    'ai_tokens_used' => 0,
+                    'overage_requests' => 0,
+                    'overage_tokens' => 0,
+                    'current_cycle_start' => $cycle['start']->toDateString(),
+                    'current_cycle_end' => $cycle['end']->toDateString(),
+                ]);
+                $usage->refresh();
+            }
 
             $newRequests = $usage->ai_requests_used + 1;
             $newTokens = $usage->ai_tokens_used + $tokensUsed;
@@ -119,5 +144,10 @@ class AiQuotaGuardService
                 'cycle_end' => $usage->current_cycle_end,
             ];
         });
+    }
+
+    public function incrementUsage(Company $company, Plan $plan, int $tokensUsed): array
+    {
+        return $this->reserveAndCommitUsage($company, $plan, $tokensUsed);
     }
 }

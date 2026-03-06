@@ -15,6 +15,7 @@ class StoreSubscriptionChangeRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'company_id' => ['prohibited'],
             'plan' => ['required', Rule::in(['starter', 'pro', 'enterprise'])],
             'billing_period' => ['required', Rule::in(['monthly', 'semiannual', 'annual'])],
         ];
