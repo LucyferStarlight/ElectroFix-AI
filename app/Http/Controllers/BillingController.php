@@ -14,7 +14,7 @@ class BillingController extends Controller
     {
     }
 
-    public function checkout(Request $request): Response
+    public function checkout(Request $request)
     {
         $data = $request->validate([
             'company_id' => ['prohibited'],

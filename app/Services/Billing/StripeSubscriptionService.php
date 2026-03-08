@@ -9,6 +9,8 @@ use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
 use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Laravel\Cashier\Checkout;
+use App\Services\Billing\PlanPrice;
 
 class StripeSubscriptionService
 {
@@ -18,14 +20,16 @@ class StripeSubscriptionService
     ) {
     }
 
-    public function checkoutHosted(Company $company, string $planName, string $billingPeriod): Response
+   public function checkoutHosted(Company $company, string $plan, string $period)
     {
-        $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod, (string) $company->currency);
-        $company->createOrGetStripeCustomer();
+        $priceId = PlanPrice::get($plan, $period);
+
+        if (!$priceId) {
+            throw new \Exception("Plan o periodo inválido");
+        }
 
         return $company
-            ->newSubscription('default', $price->stripe_price_id)
-            ->trialDays((int) $price->trial_days)
+            ->newSubscription('default', $priceId)
             ->checkout([
                 'success_url' => route('billing.success'),
                 'cancel_url' => route('billing.cancel'),
