@@ -10,6 +10,9 @@ use App\Models\User;
 use App\Support\TechnicianStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class TechnicianController extends Controller
 {
@@ -46,39 +49,41 @@ class TechnicianController extends Controller
         ]);
     }
 
-    public function store(StoreTechnicianProfileRequest $request): RedirectResponse
+    public function store(Request $request)
     {
-        $company = $request->user()->company;
-        abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
-
-        $data = $request->validated();
-
-        if (! empty($data['user_id'])) {
-            $user = User::query()
-                ->where('company_id', $company->id)
-                ->where('id', (int) $data['user_id'])
-                ->whereIn('role', ['worker', 'admin', 'developer'])
-                ->where('is_active', true)
-                ->first();
-
-            if (! $user) {
-                abort(422, 'El usuario seleccionado no puede ser técnico en esta empresa.');
-            }
-        }
-
-        TechnicianProfile::query()->create([
-            'company_id' => $company->id,
-            'user_id' => $data['user_id'] ?? null,
-            'employee_code' => $data['employee_code'],
-            'display_name' => $data['display_name'],
-            'specialties' => $data['specialties'] ?? [],
-            'status' => $data['status'],
-            'max_concurrent_orders' => $data['max_concurrent_orders'],
-            'hourly_cost' => $data['hourly_cost'] ?? 0,
-            'is_assignable' => $request->boolean('is_assignable', true),
+        $request->validate([
+            'display_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'employee_code' => 'required|string|max:50',
+            'hourly_rate' => 'nullable|numeric',
+            'specialties' => 'nullable|string'
         ]);
 
-        return back()->with('success', 'Perfil técnico creado correctamente.');
+        DB::transaction(function () use ($request) {
+
+            // Crear usuario del sistema
+            $user = User::create([
+                'name' => $request->display_name,
+                'email' => $request->email,
+                'password' => Hash::make(Str::random(12)),
+                'role' => 'worker'
+            ]);
+
+            // Crear perfil técnico
+            TechnicianProfile::create([
+                'company_id' => auth()->user()->company_id,
+                'user_id' => $user->id,
+                'employee_code' => $request->employee_code,
+                'display_name' => $request->display_name,
+                'hourly_rate' => $request->hourly_rate,
+                'specialties' => $request->specialties,
+                'status' => 'active',
+                'max_concurrent_orders' => 3
+            ]);
+        });
+
+        return redirect()->route('admin.technicians.index')
+            ->with('success', 'Técnico creado correctamente');
     }
 
     public function update(UpdateTechnicianProfileRequest $request, TechnicianProfile $technician): RedirectResponse
