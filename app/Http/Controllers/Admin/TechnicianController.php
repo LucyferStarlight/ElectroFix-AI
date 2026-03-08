@@ -77,7 +77,7 @@ class TechnicianController extends Controller
                 'display_name' => $request->display_name,
                 'hourly_rate' => $request->hourly_rate,
                 'specialties' => $request->specialties,
-                'status' => 'active',
+                'status' => 'Available',
                 'max_concurrent_orders' => 3
             ]);
         });
