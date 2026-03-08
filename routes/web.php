@@ -9,7 +9,6 @@ use App\Http\Controllers\BillingController as StripeBillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
-use App\Http\Controllers\Developer\DeveloperSubscriptionController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
@@ -106,7 +105,5 @@ Route::middleware(['auth', 'subscription_active'])->group(function (): void {
         Route::get('/developer/companies/{company}', [CompanyInsightsController::class, 'show'])->name('developer.companies.show');
         Route::get('/developer/subscriptions', [CompanyInsightsController::class, 'subscriptions'])->name('developer.subscriptions');
         Route::get('/developer/test-company', [CompanyInsightsController::class, 'testCompany'])->name('developer.test-company');
-        Route::post('/developer/companies/{company}/assign-developer-test', [DeveloperSubscriptionController::class, 'assignDeveloperTest'])
-            ->name('developer.subscriptions.assign-devtest');
     });
 });
