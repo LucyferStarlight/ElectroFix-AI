@@ -35,14 +35,14 @@ class BillingController extends Controller
     public function success(): RedirectResponse
     {
         return redirect()
-            ->route('admin.subscription.edit')
+            ->route('billing.plans')
             ->with('success', 'Checkout completado. Stripe confirmará el estado final por webhook.');
     }
 
     public function cancel(): RedirectResponse
     {
         return redirect()
-            ->route('admin.subscription.edit')
+            ->route('billing.plans')
             ->with('warning', 'El checkout fue cancelado. No se aplicaron cambios.');
     }
 

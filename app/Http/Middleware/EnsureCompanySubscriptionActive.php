@@ -13,6 +13,7 @@ class EnsureCompanySubscriptionActive
         'admin.subscription.checkout',
         'admin.subscription.change',
         'admin.subscription.cancel',
+        'billing.plans',
         'billing.checkout',
         'billing.success',
         'billing.cancel',
@@ -68,7 +69,7 @@ class EnsureCompanySubscriptionActive
         }
 
         if ($role === 'admin') {
-            return redirect()->route('admin.subscription.edit')->withErrors([
+            return redirect()->route('billing.plans')->withErrors([
                 'email' => $message,
             ]);
         }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\TechnicianController;
 use App\Http\Controllers\Admin\WorkerController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController as StripeBillingController;
+use App\Http\Controllers\BillingPlansController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
@@ -29,6 +30,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
+
+Route::middleware(['auth', 'role:admin'])->group(function (): void {
+    Route::get('/billing/plans', [BillingPlansController::class, 'index'])->name('billing.plans');
+});
 
 Route::middleware(['auth', 'subscription_active'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
