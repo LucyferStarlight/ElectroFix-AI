@@ -58,6 +58,8 @@ class TechnicianController extends Controller
             'max_concurrent_orders' => ['required', 'integer', 'min:1', 'max:100'],
             'status' => ['required', 'string'],
             'specialties' => ['nullable'],
+            'can_access_billing' => ['nullable', 'boolean'],
+            'can_access_inventory' => ['nullable', 'boolean'],
         ]);
 
         $companyId = (int) auth()->user()->company_id;
@@ -73,8 +75,8 @@ class TechnicianController extends Controller
                 'password' => Hash::make($tempPassword),
                 'role' => 'worker',
                 'is_active' => true,
-                'can_access_billing' => false,
-                'can_access_inventory' => false,
+                'can_access_billing' => $request->boolean('can_access_billing'),
+                'can_access_inventory' => $request->boolean('can_access_inventory'),
                 'must_change_password' => true,
             ]);
 
@@ -107,6 +109,11 @@ class TechnicianController extends Controller
         $technician->update([
             ...$request->validated(),
             'is_assignable' => $request->boolean('is_assignable'),
+        ]);
+
+        $technician->user()?->update([
+            'can_access_billing' => $request->boolean('can_access_billing'),
+            'can_access_inventory' => $request->boolean('can_access_inventory'),
         ]);
 
         return back()->with('success', 'Perfil técnico actualizado correctamente.');

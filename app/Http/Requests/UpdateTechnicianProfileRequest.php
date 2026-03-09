@@ -23,6 +23,8 @@ class UpdateTechnicianProfileRequest extends FormRequest
             'max_concurrent_orders' => ['required', 'integer', 'min:1', 'max:100'],
             'hourly_cost' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'is_assignable' => ['nullable', 'boolean'],
+            'can_access_billing' => ['nullable', 'boolean'],
+            'can_access_inventory' => ['nullable', 'boolean'],
         ];
     }
 }
