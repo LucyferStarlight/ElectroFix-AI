@@ -50,9 +50,9 @@
                         <div class="col-12">
                             <label class="form-label">Periodo</label>
                             <select class="form-select input-ui" name="billing_period" required>
-                                <option value="monthly">Mensual (7 días trial)</option>
-                                <option value="semiannual">Semestral (15 días trial)</option>
-                                <option value="annual">Anual (15 días trial)</option>
+                                <option value="monthly">Mensual{{ $showTrialBadge ? " (7 días trial)" : "" }}</option>
+                                <option value="semiannual">Semestral{{ $showTrialBadge ? " (15 días trial)" : "" }}</option>
+                                <option value="annual">Anual{{ $showTrialBadge ? " (15 días trial)" : "" }}</option>
                             </select>
                         </div>
                         <div class="col-12">
