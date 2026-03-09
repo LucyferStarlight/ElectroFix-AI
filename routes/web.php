@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\SubscriptionController as PublicSubscriptionController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
 use App\Http\Controllers\Worker\BillingController as WorkerBillingController;
@@ -17,7 +18,7 @@ use App\Http\Controllers\Worker\InventoryController;
 use App\Http\Controllers\Worker\OrderController;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'landing')->name('landing');
+Route::get('/', [PublicSubscriptionController::class, 'index'])->name('landing');
 Route::view('/terms-and-conditions', 'terms')->name('terms');
 Route::get('/login', [AuthController::class, 'showLoginForm'])->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login.store');
@@ -27,6 +28,7 @@ Route::get('/register/confirmation/{token}', [RegistrationController::class, 'co
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
 Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');
+Route::post('/subscribe', [PublicSubscriptionController::class, 'subscribe'])->middleware('guest')->name('subscribe');
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');

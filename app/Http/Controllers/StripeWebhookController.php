@@ -17,7 +17,7 @@ class StripeWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
-        $secret = (string) config('cashier.webhook.secret');
+        $secret = (string) (config('stripe.webhook_secret') ?: config('services.stripe.webhook_secret') ?: config('cashier.webhook.secret'));
         $payload = $request->getContent();
         $signature = (string) $request->header('Stripe-Signature');
 
