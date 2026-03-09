@@ -161,18 +161,9 @@
 }
 
 .technician-permissions-panel {
-  background-color: #fff;
   border-color: var(--ef-border) !important;
 }
 
 .technician-permissions-panel .form-check-input {
-  border: 2px solid #495057;
-}
-
-body.theme-dark .technician-permissions-panel {
-  background-color: var(--ef-surface-soft) !important;
-}
-
-body.theme-dark .technician-permissions-panel .form-check-input {
-  border-color: #cbd5e1;
+  border: 2px solid var(--ef-text-soft);
 }
