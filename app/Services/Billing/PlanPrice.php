@@ -2,32 +2,25 @@
 
 namespace App\Services\Billing;
 
+use App\Models\PlanPrice as PlanPriceModel;
+
 class PlanPrice
 {
-    public static function get(string $plan, string $period): ?string
+    public static function get(string $plan, string $period, string $currency = 'mxn'): ?string
     {
-        $plans = [
+        $currency = strtolower(trim($currency)) ?: 'mxn';
 
-            'starter' => [
-                'monthly' => env('STARTER_MONTHLY'),
-                'semiannual' => env('STARTER_SEMIANNUAL'),
-                'annual' => env('STARTER_ANNUAL'),
-            ],
+        $query = PlanPriceModel::query()
+            ->whereHas('plan', fn ($q) => $q->where('name', $plan))
+            ->where('billing_period', $period)
+            ->where('is_active', true);
 
-            'pro' => [
-                'monthly' => env('PRO_MONTHLY'),
-                'semiannual' => env('PRO_SEMIANNUAL'),
-                'annual' => env('PRO_ANNUAL'),
-            ],
+        $price = $query->where('currency', $currency)->value('stripe_price_id');
 
-            'enterprise' => [
-                'monthly' => env('ENTERPRISE_MONTHLY'),
-                'semiannual' => env('ENTERPRISE_SEMIANNUAL'),
-                'annual' => env('ENTERPRISE_ANNUAL'),
-            ],
+        if ($price) {
+            return $price;
+        }
 
-        ];
-
-        return $plans[$plan][$period] ?? null;
+        return $query->where('currency', 'mxn')->value('stripe_price_id');
     }
 }

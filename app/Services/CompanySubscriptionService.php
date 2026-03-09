@@ -58,7 +58,7 @@ class CompanySubscriptionService
             'active' => 'active',
             'past_due' => 'past_due',
             'canceled' => 'canceled',
-            default => 'suspended',
+            default => 'inactive',
         };
 
         return $this->syncBusinessSubscription($company, $plan->name, $billingPeriod, $stripeSubscription->id, $businessStatus);

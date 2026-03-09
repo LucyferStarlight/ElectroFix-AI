@@ -16,6 +16,8 @@ class DeveloperSubscriptionController extends Controller
 
     public function assignDeveloperTest(Request $request, Company $company): RedirectResponse
     {
+        abort_unless(app()->environment('local'), 404);
+
         $this->companySubscriptionService->syncBusinessSubscription($company, 'developer_test', 'monthly', $company->subscription?->stripe_subscription_id);
 
         return back()->with('success', 'Plan Developer_Test asignado manualmente.');

@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class StripeWebhookService
 {
+    public function __construct(private readonly CompanySubscriptionService $companySubscriptionService)
+    {
+    }
+
     public function handle(array $eventPayload): void
     {
         $eventId = (string) Arr::get($eventPayload, 'id');
@@ -93,6 +97,8 @@ class StripeWebhookService
     {
         $customerId = (string) Arr::get($payload, 'data.object.customer');
         $subscriptionId = (string) Arr::get($payload, 'data.object.subscription');
+        $plan = (string) Arr::get($payload, 'data.object.metadata.plan');
+        $billingPeriod = (string) Arr::get($payload, 'data.object.metadata.billing_period');
 
         if ($customerId === '' || $subscriptionId === '') {
             return;
@@ -103,14 +109,25 @@ class StripeWebhookService
             return;
         }
 
-        Subscription::query()->updateOrCreate(
-            ['company_id' => $company->id],
-            [
-                'stripe_subscription_id' => $subscriptionId,
-                'status' => 'trialing',
-                'cancel_at_period_end' => false,
-            ]
-        );
+        if (in_array($plan, ['starter', 'pro', 'enterprise'], true)
+            && in_array($billingPeriod, ['monthly', 'semiannual', 'annual'], true)) {
+            $this->companySubscriptionService->syncBusinessSubscription(
+                $company,
+                $plan,
+                $billingPeriod,
+                $subscriptionId,
+                'trialing'
+            );
+        } else {
+            Subscription::query()->updateOrCreate(
+                ['company_id' => $company->id],
+                [
+                    'stripe_subscription_id' => $subscriptionId,
+                    'status' => 'trialing',
+                    'cancel_at_period_end' => false,
+                ]
+            );
+        }
 
         Log::info('ElectroFix billing notification: checkout completed', [
             'company_id' => $company->id,
@@ -168,7 +185,7 @@ class StripeWebhookService
             'active' => 'active',
             'past_due' => 'past_due',
             'canceled' => 'canceled',
-            default => 'suspended',
+            default => 'inactive',
         };
 
         $updates = [
