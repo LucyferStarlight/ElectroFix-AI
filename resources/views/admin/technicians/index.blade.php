@@ -69,16 +69,14 @@
                     </div>
                 </div>
                 <div class="col-12">
-                    <div class="border rounded p-3">
+                    <div class="border rounded p-3 bg-body-tertiary">
                         <p class="fw-semibold mb-2">Permisos del técnico</p>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="can_access_billing" id="can_access_billing" value="1" @checked(old('can_access_billing'))>
-                            <label class="form-check-label" for="can_access_billing">Acceso a facturación</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="can_access_inventory" id="can_access_inventory" value="1" @checked(old('can_access_inventory'))>
-                            <label class="form-check-label" for="can_access_inventory">Acceso a inventario</label>
-                        </div>
+                        @include('admin.technicians.partials.permissions', [
+                            'inventoryId' => 'can_access_inventory',
+                            'billingId' => 'can_access_billing',
+                            'canAccessInventory' => old('can_access_inventory'),
+                            'canAccessBilling' => old('can_access_billing'),
+                        ])
                     </div>
                 </div>
                 <div class="col-12">
@@ -116,8 +114,8 @@
                                 <td>{{ $technician->max_concurrent_orders }}</td>
                                 <td>${{ number_format((float) $technician->hourly_cost, 2) }}</td>
                                 <td>
-                                    <span class="badge bg-light text-dark">Fac: {{ $technician->user?->can_access_billing ? 'Sí' : 'No' }}</span>
-                                    <span class="badge bg-light text-dark">Inv: {{ $technician->user?->can_access_inventory ? 'Sí' : 'No' }}</span>
+                                    <span class="badge text-bg-secondary">Fac: {{ $technician->user?->can_access_billing ? 'Sí' : 'No' }}</span>
+                                    <span class="badge text-bg-secondary">Inv: {{ $technician->user?->can_access_inventory ? 'Sí' : 'No' }}</span>
                                 </td>
                                 <td class="pe-3 text-end">
                                     <button class="btn btn-ui btn-outline-ui btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#edit-technician-{{ $technician->id }}">Editar</button>
@@ -129,7 +127,7 @@
                                 </td>
                             </tr>
                             <tr class="collapse" id="edit-technician-{{ $technician->id }}">
-                                <td colspan="9" class="bg-light">
+                                <td colspan="9" class="bg-body-tertiary">
                                     <form method="post" action="{{ route('admin.technicians.update', $technician) }}" class="row g-3 p-2">
                                         @csrf
                                         @method('PUT')
@@ -165,14 +163,12 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label d-block">Permisos del técnico</label>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="can_access_billing" value="1" id="billing-{{ $technician->id }}" @checked($technician->user?->can_access_billing)>
-                                                <label class="form-check-label" for="billing-{{ $technician->id }}">Acceso a facturación</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="can_access_inventory" value="1" id="inventory-{{ $technician->id }}" @checked($technician->user?->can_access_inventory)>
-                                                <label class="form-check-label" for="inventory-{{ $technician->id }}">Acceso a inventario</label>
-                                            </div>
+                                            @include('admin.technicians.partials.permissions', [
+                                                'inventoryId' => 'inventory-' . $technician->id,
+                                                'billingId' => 'billing-' . $technician->id,
+                                                'canAccessInventory' => $technician->user?->can_access_inventory,
+                                                'canAccessBilling' => $technician->user?->can_access_billing,
+                                            ])
                                         </div>
                                         <div class="col-12 text-end">
                                             <button class="btn btn-ui btn-primary-ui btn-sm" type="submit">Guardar cambios</button>
