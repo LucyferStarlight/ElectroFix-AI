@@ -69,7 +69,7 @@
                     </div>
                 </div>
                 <div class="col-12">
-                    <div class="card technician-permissions-panel bg-body border">
+                    <div class="card technician-permissions-panel bg-body-secondary text-body border">
                         <div class="card-body p-3">
                             <p class="fw-semibold mb-2">Permisos del técnico</p>
                             @include('admin.technicians.partials.permissions', [
@@ -164,7 +164,7 @@
                                             <input class="form-control input-ui" name="specialties[]" value="{{ implode(', ', (array) $technician->specialties) }}">
                                         </div>
                                         <div class="col-md-6">
-                                            <div class="card technician-permissions-panel bg-body border">
+                                            <div class="card technician-permissions-panel bg-body-secondary text-body border">
                                                 <div class="card-body p-3">
                                                     <label class="form-label d-block">Permisos del técnico</label>
                                                     @include('admin.technicians.partials.permissions', [

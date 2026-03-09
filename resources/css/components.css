@@ -161,9 +161,9 @@
 }
 
 .technician-permissions-panel {
-  border-color: var(--ef-border) !important;
+  border-color: var(--bs-border-color) !important;
 }
 
 .technician-permissions-panel .form-check-input {
-  border: 2px solid var(--ef-text-soft);
+  border: 2px solid var(--bs-secondary-color);
 }
