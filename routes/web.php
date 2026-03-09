@@ -25,11 +25,13 @@ Route::get('/register', [RegistrationController::class, 'showForm'])->middleware
 Route::post('/register', [RegistrationController::class, 'store'])->middleware('guest')->name('register.store');
 Route::get('/register/confirmation/{token}', [RegistrationController::class, 'confirmation'])->middleware('guest')->name('register.confirmation');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
+Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
-Route::middleware(['auth', 'subscription_active'])->group(function (): void {
+Route::middleware(['auth', 'must_change_password', 'subscription_active'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::middleware('role:worker,admin,developer')->group(function (): void {
