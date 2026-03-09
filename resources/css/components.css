@@ -161,6 +161,8 @@
 }
 
 .technician-permissions-panel {
+  background-color: var(--bs-secondary-bg) !important;
+  color: var(--bs-body-color);
   border-color: var(--bs-border-color) !important;
 }
 
