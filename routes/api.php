@@ -17,9 +17,6 @@ use Illuminate\Support\Facades\Route;
 Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook']);
 
 Route::middleware(['auth:sanctum'])->group(function (): void {
-    Route::post('/billing/stripe/checkout', [StripeController::class, 'checkout']);
-    Route::post('/billing/stripe/change', [StripeController::class, 'change']);
-    Route::post('/billing/stripe/cancel', [StripeController::class, 'cancel']);
 });
 
 Route::prefix('v1')->group(function (): void {
@@ -49,8 +46,5 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/billing/subscription', [SubscriptionApiController::class, 'show'])->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::get('/billing/subscription/plans', [SubscriptionApiController::class, 'plans'])->middleware('token_ability:'.ApiAbility::ORDERS_READ);
-        Route::post('/billing/subscription/checkout', [SubscriptionApiController::class, 'checkout'])->middleware('token_ability:'.ApiAbility::BILLING_WRITE);
-        Route::post('/billing/subscription/change', [SubscriptionApiController::class, 'change'])->middleware('token_ability:'.ApiAbility::BILLING_WRITE);
-        Route::post('/billing/subscription/cancel', [SubscriptionApiController::class, 'cancel'])->middleware('token_ability:'.ApiAbility::BILLING_WRITE);
     });
 });
