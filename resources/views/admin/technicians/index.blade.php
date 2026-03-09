@@ -69,7 +69,7 @@
                     </div>
                 </div>
                 <div class="col-12">
-                    <div class="border rounded p-3 bg-body-tertiary">
+                    <div class="technician-permissions-panel bg-white border rounded p-3">
                         <p class="fw-semibold mb-2">Permisos del técnico</p>
                         @include('admin.technicians.partials.permissions', [
                             'inventoryId' => 'can_access_inventory',
@@ -162,6 +162,7 @@
                                             <input class="form-control input-ui" name="specialties[]" value="{{ implode(', ', (array) $technician->specialties) }}">
                                         </div>
                                         <div class="col-md-6">
+                                            <div class="technician-permissions-panel bg-white border rounded p-3">
                                             <label class="form-label d-block">Permisos del técnico</label>
                                             @include('admin.technicians.partials.permissions', [
                                                 'inventoryId' => 'inventory-' . $technician->id,
@@ -169,6 +170,7 @@
                                                 'canAccessInventory' => $technician->user?->can_access_inventory,
                                                 'canAccessBilling' => $technician->user?->can_access_billing,
                                             ])
+                                            </div>
                                         </div>
                                         <div class="col-12 text-end">
                                             <button class="btn btn-ui btn-primary-ui btn-sm" type="submit">Guardar cambios</button>

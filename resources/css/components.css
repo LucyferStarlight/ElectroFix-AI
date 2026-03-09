@@ -159,3 +159,20 @@
     max-height: calc(100vh - 1rem);
   }
 }
+
+.technician-permissions-panel {
+  background-color: #fff;
+  border-color: var(--ef-border) !important;
+}
+
+.technician-permissions-panel .form-check-input {
+  border: 2px solid #495057;
+}
+
+body.theme-dark .technician-permissions-panel {
+  background-color: var(--ef-surface-soft) !important;
+}
+
+body.theme-dark .technician-permissions-panel .form-check-input {
+  border-color: #cbd5e1;
+}
