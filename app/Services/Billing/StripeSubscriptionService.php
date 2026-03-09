@@ -20,27 +20,37 @@ class StripeSubscriptionService
     public function checkoutHosted(Company $company, string $plan, string $period)
     {
         $price = $this->planCatalogService->resolvePrice($plan, $period, (string) $company->currency);
+        $hasHadSubscription = Subscription::query()
+            ->where('company_id', $company->id)
+            ->exists();
+
         $company->createOrGetStripeCustomer();
 
-        return $company
-            ->newSubscription('default', $price->stripe_price_id)
-            ->checkout([
-                'success_url' => route('billing.success'),
-                'cancel_url' => route('billing.cancel'),
-                'client_reference_id' => (string) $company->id,
+        $checkoutData = [
+            'success_url' => route('billing.success'),
+            'cancel_url' => route('billing.cancel'),
+            'client_reference_id' => (string) $company->id,
+            'metadata' => [
+                'company_id' => (string) $company->id,
+                'plan' => $plan,
+                'billing_period' => $period,
+            ],
+            'subscription_data' => [
                 'metadata' => [
                     'company_id' => (string) $company->id,
                     'plan' => $plan,
                     'billing_period' => $period,
                 ],
-                'subscription_data' => [
-                    'metadata' => [
-                        'company_id' => (string) $company->id,
-                        'plan' => $plan,
-                        'billing_period' => $period,
-                    ],
-                ],
-            ]);
+            ],
+        ];
+
+        if (! $hasHadSubscription && (int) $price->trial_days > 0) {
+            $checkoutData['subscription_data']['trial_period_days'] = (int) $price->trial_days;
+        }
+
+        return $company
+            ->newSubscription('default', $price->stripe_price_id)
+            ->checkout($checkoutData);
     }
 
     public function checkoutDirect(Company $company, string $planName, string $billingPeriod, string $paymentMethod): Subscription
