@@ -116,8 +116,8 @@
 
 .table-ui {
   --bs-table-bg: transparent;
-  --bs-table-striped-bg: #f8fafc;
-  --bs-table-hover-bg: #f1f5f9;
+  --bs-table-striped-bg: var(--bs-tertiary-bg);
+  --bs-table-hover-bg: var(--bs-secondary-bg);
   border-color: var(--ef-border);
 }
 
@@ -158,4 +158,14 @@
   .billing-modal-content {
     max-height: calc(100vh - 1rem);
   }
+}
+
+.technician-permissions-panel {
+  background-color: var(--bs-secondary-bg) !important;
+  color: var(--bs-body-color);
+  border-color: var(--bs-border-color) !important;
+}
+
+.technician-permissions-panel .form-check-input {
+  border: 2px solid var(--bs-secondary-color);
 }
