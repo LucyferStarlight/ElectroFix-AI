@@ -28,10 +28,12 @@
                 <p class="mb-1"><strong>Inicio:</strong> {{ optional($company->subscription?->starts_at)->toDateString() }}</p>
                 <p class="mb-1"><strong>Fin:</strong> {{ optional($company->subscription?->ends_at)->toDateString() }}</p>
                 <p class="mb-0"><strong>Ciclo:</strong> {{ $company->subscription?->billing_cycle }}</p>
-                <form method="post" action="{{ route('developer.subscriptions.assign-devtest', $company) }}" class="mt-3">
-                    @csrf
-                    <button class="btn btn-ui btn-outline-ui btn-sm" type="submit">Asignar Developer_Test</button>
-                </form>
+                @if(app()->environment('local'))
+                    <form method="post" action="{{ route('developer.subscriptions.assign-devtest', $company) }}" class="mt-3">
+                        @csrf
+                        <button class="btn btn-ui btn-outline-ui btn-sm" type="submit">Asignar Developer_Test</button>
+                    </form>
+                @endif
             </div></div>
         </div>
         <div class="col-12">
