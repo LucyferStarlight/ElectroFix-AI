@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isDark = theme === 'dark';
     document.body.classList.toggle('theme-dark', isDark);
     root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    root.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
     localStorage.setItem(key, isDark ? 'dark' : 'light');
 
     labels.forEach((label) => {

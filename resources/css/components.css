@@ -116,8 +116,8 @@
 
 .table-ui {
   --bs-table-bg: transparent;
-  --bs-table-striped-bg: #f8fafc;
-  --bs-table-hover-bg: #f1f5f9;
+  --bs-table-striped-bg: var(--bs-tertiary-bg);
+  --bs-table-hover-bg: var(--bs-secondary-bg);
   border-color: var(--ef-border);
 }
 
