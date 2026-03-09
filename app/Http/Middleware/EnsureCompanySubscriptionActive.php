@@ -8,11 +8,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureCompanySubscriptionActive
 {
+    private const ACCESS_ALLOWED_STATUSES = ['active', 'trialing'];
+
+    private const ACCESS_BLOCKED_STATUSES = ['past_due', 'canceled', 'inactive'];
+
     private const ADMIN_ALLOWED_ROUTES_WHEN_INACTIVE = [
         'admin.subscription.edit',
-        'admin.subscription.checkout',
-        'admin.subscription.change',
-        'admin.subscription.cancel',
         'billing.checkout',
         'billing.success',
         'billing.cancel',
@@ -34,7 +35,7 @@ class EnsureCompanySubscriptionActive
             return $this->deny($request, $user->role, 'No existe una suscripción activa para tu empresa.');
         }
 
-        if (in_array($subscription->status, ['active', 'trialing'], true)) {
+        if (in_array($subscription->status, self::ACCESS_ALLOWED_STATUSES, true)) {
             return $next($request);
         }
 
@@ -49,6 +50,10 @@ class EnsureCompanySubscriptionActive
                 $subscription->status,
                 $subscription->current_period_end?->format('Y-m-d') ?? 'N/A'
             );
+
+        if (! in_array($subscription->status, self::ACCESS_BLOCKED_STATUSES, true)) {
+            $message = sprintf('Tu suscripción está en estado %s. Contacta soporte para reactivarla.', $subscription->status);
+        }
 
         return $this->deny($request, $user->role, $message);
     }

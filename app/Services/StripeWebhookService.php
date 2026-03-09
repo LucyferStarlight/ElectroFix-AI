@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class StripeWebhookService
 {
+    public function __construct(private readonly CompanySubscriptionService $companySubscriptionService)
+    {
+    }
+
     public function handle(array $eventPayload): void
     {
         $eventId = (string) Arr::get($eventPayload, 'id');
@@ -52,7 +56,8 @@ class StripeWebhookService
                     'customer.subscription.created',
                     'customer.subscription.updated' => $this->onSubscriptionUpsert($eventPayload),
                     'customer.subscription.deleted' => $this->onSubscriptionDeleted($eventPayload),
-                    'invoice.payment_succeeded' => $this->onInvoicePaid($eventPayload),
+                    'invoice.payment_succeeded',
+                    'invoice.paid' => $this->onInvoicePaid($eventPayload),
                     'invoice.payment_failed' => $this->onInvoiceFailed($eventPayload),
                     default => null,
                 };
@@ -64,6 +69,7 @@ class StripeWebhookService
                 'customer.subscription.updated',
                 'customer.subscription.deleted',
                 'invoice.payment_succeeded',
+                'invoice.paid',
                 'invoice.payment_failed',
             ];
 
@@ -93,6 +99,8 @@ class StripeWebhookService
     {
         $customerId = (string) Arr::get($payload, 'data.object.customer');
         $subscriptionId = (string) Arr::get($payload, 'data.object.subscription');
+        $plan = (string) Arr::get($payload, 'data.object.metadata.plan');
+        $billingPeriod = (string) Arr::get($payload, 'data.object.metadata.billing_period');
 
         if ($customerId === '' || $subscriptionId === '') {
             return;
@@ -103,14 +111,58 @@ class StripeWebhookService
             return;
         }
 
-        Subscription::query()->updateOrCreate(
-            ['company_id' => $company->id],
-            [
+        $existingByStripeId = Subscription::query()
+            ->where('stripe_subscription_id', $subscriptionId)
+            ->first();
+
+        if ($existingByStripeId && $existingByStripeId->company_id !== $company->id) {
+            Log::warning('Stripe checkout completed ignored due to subscription ownership mismatch', [
+                'company_id' => $company->id,
+                'existing_company_id' => $existingByStripeId->company_id,
                 'stripe_subscription_id' => $subscriptionId,
-                'status' => 'trialing',
+            ]);
+
+            return;
+        }
+
+        if ($existingByStripeId) {
+            $updates = [
                 'cancel_at_period_end' => false,
-            ]
-        );
+            ];
+
+            if ($existingByStripeId->status === Subscription::STATUS_INACTIVE) {
+                $updates['status'] = Subscription::STATUS_TRIALING;
+            }
+
+            $existingByStripeId->update($updates);
+
+            Log::info('ElectroFix billing notification: checkout already synchronized', [
+                'company_id' => $company->id,
+                'stripe_subscription_id' => $subscriptionId,
+            ]);
+
+            return;
+        }
+
+        if (in_array($plan, ['starter', 'pro', 'enterprise'], true)
+            && in_array($billingPeriod, ['monthly', 'semiannual', 'annual'], true)) {
+            $this->companySubscriptionService->syncBusinessSubscription(
+                $company,
+                $plan,
+                $billingPeriod,
+                $subscriptionId,
+                Subscription::STATUS_TRIALING
+            );
+        } else {
+            Subscription::query()->updateOrCreate(
+                ['company_id' => $company->id],
+                [
+                    'stripe_subscription_id' => $subscriptionId,
+                    'status' => Subscription::STATUS_TRIALING,
+                    'cancel_at_period_end' => false,
+                ]
+            );
+        }
 
         Log::info('ElectroFix billing notification: checkout completed', [
             'company_id' => $company->id,
@@ -127,7 +179,7 @@ class StripeWebhookService
 
         Subscription::query()
             ->where('stripe_subscription_id', $stripeSubscriptionId)
-            ->update(['status' => 'active']);
+            ->update(['status' => Subscription::STATUS_ACTIVE]);
 
         Log::info('ElectroFix billing notification: payment succeeded', [
             'stripe_subscription_id' => $stripeSubscriptionId,
@@ -143,7 +195,7 @@ class StripeWebhookService
 
         Subscription::query()
             ->where('stripe_subscription_id', $stripeSubscriptionId)
-            ->update(['status' => 'past_due']);
+            ->update(['status' => Subscription::STATUS_PAST_DUE]);
 
         Log::warning('ElectroFix billing notification: payment failed', [
             'stripe_subscription_id' => $stripeSubscriptionId,
@@ -164,11 +216,11 @@ class StripeWebhookService
         $priceId = (string) Arr::get($payload, 'data.object.items.data.0.price.id');
 
         $mappedStatus = match ($status) {
-            'trialing' => 'trialing',
-            'active' => 'active',
-            'past_due' => 'past_due',
-            'canceled' => 'canceled',
-            default => 'suspended',
+            'trialing' => Subscription::STATUS_TRIALING,
+            'active' => Subscription::STATUS_ACTIVE,
+            'past_due' => Subscription::STATUS_PAST_DUE,
+            'canceled' => Subscription::STATUS_CANCELED,
+            default => Subscription::STATUS_INACTIVE,
         };
 
         $updates = [
@@ -185,18 +237,32 @@ class StripeWebhookService
             $updates['billing_cycle'] = $price->billing_period === 'annual' ? 'yearly' : 'monthly';
         }
 
-        Subscription::query()
-            ->where('stripe_subscription_id', $stripeSubscriptionId)
-            ->update($updates);
-
+        $company = null;
         if ($stripeCustomerId !== '') {
             $company = $this->syncCompanyByStripeCustomerId($stripeCustomerId);
-            if ($company) {
-                Subscription::query()->updateOrCreate(
-                    ['company_id' => $company->id],
-                    array_merge($updates, ['stripe_subscription_id' => $stripeSubscriptionId])
-                );
+        }
+
+        $existing = Subscription::query()
+            ->where('stripe_subscription_id', $stripeSubscriptionId)
+            ->first();
+
+        if ($existing) {
+            if ($company && $existing->company_id !== $company->id) {
+                Log::warning('Stripe subscription update ignored due to subscription ownership mismatch', [
+                    'company_id' => $company->id,
+                    'existing_company_id' => $existing->company_id,
+                    'stripe_subscription_id' => $stripeSubscriptionId,
+                ]);
+
+                return;
             }
+
+            $existing->update($updates);
+        } elseif ($company) {
+            Subscription::query()->updateOrCreate(
+                ['company_id' => $company->id],
+                array_merge($updates, ['stripe_subscription_id' => $stripeSubscriptionId])
+            );
         }
 
         Log::info('ElectroFix billing notification: subscription updated', [
@@ -215,7 +281,7 @@ class StripeWebhookService
         Subscription::query()
             ->where('stripe_subscription_id', $stripeSubscriptionId)
             ->update([
-                'status' => 'canceled',
+                'status' => Subscription::STATUS_CANCELED,
                 'cancel_at_period_end' => true,
             ]);
 

@@ -32,6 +32,7 @@ class User extends Authenticatable
         'can_access_billing',
         'can_access_inventory',
         'password',
+        'must_change_password',
     ];
 
     /**
@@ -57,6 +58,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'can_access_billing' => 'boolean',
             'can_access_inventory' => 'boolean',
+            'must_change_password' => 'boolean',
         ];
     }
 

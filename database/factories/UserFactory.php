@@ -31,6 +31,7 @@ class UserFactory extends Factory
             'is_active' => true,
             'can_access_billing' => false,
             'can_access_inventory' => false,
+            'must_change_password' => false,
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),

@@ -8,9 +8,6 @@ use App\Models\User;
 use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
 use Illuminate\Http\RedirectResponse;
-use Symfony\Component\HttpFoundation\Response;
-use Laravel\Cashier\Checkout;
-use App\Services\Billing\PlanPrice;
 
 class StripeSubscriptionService
 {
@@ -20,20 +17,40 @@ class StripeSubscriptionService
     ) {
     }
 
-   public function checkoutHosted(Company $company, string $plan, string $period)
+    public function checkoutHosted(Company $company, string $plan, string $period)
     {
-        $priceId = PlanPrice::get($plan, $period);
+        $price = $this->planCatalogService->resolvePrice($plan, $period, (string) $company->currency);
+        $hasHadSubscription = Subscription::query()
+            ->where('company_id', $company->id)
+            ->exists();
 
-        if (!$priceId) {
-            throw new \Exception("Plan o periodo inválido");
+        $company->createOrGetStripeCustomer();
+
+        $checkoutData = [
+            'success_url' => route('billing.success'),
+            'cancel_url' => route('billing.cancel'),
+            'client_reference_id' => (string) $company->id,
+            'metadata' => [
+                'company_id' => (string) $company->id,
+                'plan' => $plan,
+                'billing_period' => $period,
+            ],
+            'subscription_data' => [
+                'metadata' => [
+                    'company_id' => (string) $company->id,
+                    'plan' => $plan,
+                    'billing_period' => $period,
+                ],
+            ],
+        ];
+
+        if (! $hasHadSubscription && (int) $price->trial_days > 0) {
+            $checkoutData['subscription_data']['trial_period_days'] = (int) $price->trial_days;
         }
 
         return $company
-            ->newSubscription('default', $priceId)
-            ->checkout([
-                'success_url' => route('billing.success'),
-                'cancel_url' => route('billing.cancel'),
-            ]);
+            ->newSubscription('default', $price->stripe_price_id)
+            ->checkout($checkoutData);
     }
 
     public function checkoutDirect(Company $company, string $planName, string $billingPeriod, string $paymentMethod): Subscription

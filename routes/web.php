@@ -9,7 +9,6 @@ use App\Http\Controllers\BillingController as StripeBillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
-use App\Http\Controllers\Developer\DeveloperSubscriptionController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
@@ -26,11 +25,13 @@ Route::get('/register', [RegistrationController::class, 'showForm'])->middleware
 Route::post('/register', [RegistrationController::class, 'store'])->middleware('guest')->name('register.store');
 Route::get('/register/confirmation/{token}', [RegistrationController::class, 'confirmation'])->middleware('guest')->name('register.confirmation');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
+Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
+Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
-Route::middleware(['auth', 'subscription_active'])->group(function (): void {
+Route::middleware(['auth', 'must_change_password', 'subscription_active'])->group(function (): void {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::middleware('role:worker,admin,developer')->group(function (): void {
@@ -90,10 +91,8 @@ Route::middleware(['auth', 'subscription_active'])->group(function (): void {
         Route::post('/admin/technicians', [TechnicianController::class, 'store'])->name('admin.technicians.store');
         Route::put('/admin/technicians/{technician}', [TechnicianController::class, 'update'])->name('admin.technicians.update');
         Route::patch('/admin/technicians/{technician}/deactivate', [TechnicianController::class, 'deactivate'])->name('admin.technicians.deactivate');
+        Route::patch('/admin/technicians/{technician}/permissions', [TechnicianController::class, 'updatePermissions'])->name('admin.technicians.permissions');
         Route::get('/admin/subscription', [SubscriptionController::class, 'edit'])->name('admin.subscription.edit');
-        Route::post('/billing/subscription/checkout', [SubscriptionController::class, 'checkout'])->name('admin.subscription.checkout');
-        Route::post('/billing/subscription/change', [SubscriptionController::class, 'change'])->name('admin.subscription.change');
-        Route::post('/billing/subscription/cancel', [SubscriptionController::class, 'cancel'])->name('admin.subscription.cancel');
         Route::post('/billing/checkout', [StripeBillingController::class, 'checkout'])->name('billing.checkout');
         Route::get('/billing/success', [StripeBillingController::class, 'success'])->name('billing.success');
         Route::get('/billing/cancel', [StripeBillingController::class, 'cancel'])->name('billing.cancel');
@@ -106,7 +105,10 @@ Route::middleware(['auth', 'subscription_active'])->group(function (): void {
         Route::get('/developer/companies/{company}', [CompanyInsightsController::class, 'show'])->name('developer.companies.show');
         Route::get('/developer/subscriptions', [CompanyInsightsController::class, 'subscriptions'])->name('developer.subscriptions');
         Route::get('/developer/test-company', [CompanyInsightsController::class, 'testCompany'])->name('developer.test-company');
-        Route::post('/developer/companies/{company}/assign-developer-test', [DeveloperSubscriptionController::class, 'assignDeveloperTest'])
-            ->name('developer.subscriptions.assign-devtest');
+
+        if (app()->environment('local')) {
+            Route::post('/developer/companies/{company}/assign-developer-test', [\App\Http\Controllers\Developer\DeveloperSubscriptionController::class, 'assignDeveloperTest'])
+                ->name('developer.subscriptions.assign-devtest');
+        }
     });
 });

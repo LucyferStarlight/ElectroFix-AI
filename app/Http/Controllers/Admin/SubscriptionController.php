@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSubscriptionChangeRequest;
 use App\Http\Requests\StoreSubscriptionCheckoutRequest;
+use App\Models\Subscription;
 use App\Models\SubscriptionChangeRequest;
 use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
@@ -26,6 +27,10 @@ class SubscriptionController extends Controller
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
         $subscription = $company->subscription;
+        $hasHadSubscription = Subscription::query()
+            ->where('company_id', $company->id)
+            ->exists();
+
         $pendingChange = SubscriptionChangeRequest::query()
             ->where('company_id', $company->id)
             ->where('status', 'pending')
@@ -37,6 +42,7 @@ class SubscriptionController extends Controller
             'subscription' => $subscription,
             'plans' => $this->planCatalogService->publicPlans(),
             'pendingChange' => $pendingChange,
+            'showTrialBadge' => ! $hasHadSubscription,
         ]);
     }
 

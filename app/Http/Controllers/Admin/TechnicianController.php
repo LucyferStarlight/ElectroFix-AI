@@ -3,16 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreTechnicianProfileRequest;
 use App\Http\Requests\UpdateTechnicianProfileRequest;
 use App\Models\TechnicianProfile;
 use App\Models\User;
 use App\Support\TechnicianStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
 
 class TechnicianController extends Controller
 {
@@ -49,41 +48,58 @@ class TechnicianController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'display_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'employee_code' => 'required|string|max:50',
-            'hourly_rate' => 'nullable|numeric',
-            'specialties' => 'nullable|string'
+            'display_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'employee_code' => ['required', 'string', 'max:50'],
+            'hourly_cost' => ['nullable', 'numeric', 'min:0'],
+            'max_concurrent_orders' => ['required', 'integer', 'min:1', 'max:100'],
+            'status' => ['required', 'string'],
+            'specialties' => ['nullable'],
+            'can_access_billing' => ['nullable', 'boolean'],
+            'can_access_inventory' => ['nullable', 'boolean'],
         ]);
 
-        DB::transaction(function () use ($request) {
+        $companyId = (int) auth()->user()->company_id;
+        abort_if($companyId <= 0, 404, 'Empresa no encontrada para este usuario.');
 
-            // Crear usuario del sistema
-            $user = User::create([
-                'name' => $request->display_name,
-                'email' => $request->email,
-                'password' => Hash::make(Str::random(12)),
-                'role' => 'worker'
+        $tempPassword = Str::password(12);
+
+        DB::transaction(function () use ($request, $companyId, $tempPassword): void {
+            $user = User::query()->create([
+                'company_id' => $companyId,
+                'name' => $request->string('display_name')->toString(),
+                'email' => $request->string('email')->toString(),
+                'password' => Hash::make($tempPassword),
+                'role' => 'worker',
+                'is_active' => true,
+                'can_access_billing' => $request->boolean('can_access_billing'),
+                'can_access_inventory' => $request->boolean('can_access_inventory'),
+                'must_change_password' => true,
             ]);
 
-            // Crear perfil técnico
-            TechnicianProfile::create([
-                'company_id' => auth()->user()->company_id,
+            TechnicianProfile::query()->create([
+                'company_id' => $companyId,
                 'user_id' => $user->id,
-                'employee_code' => $request->employee_code,
-                'display_name' => $request->display_name,
-                'hourly_rate' => $request->hourly_rate,
-                'specialties' => $request->specialties,
-                'status' => 'Available',
-                'max_concurrent_orders' => 3
+                'employee_code' => $request->string('employee_code')->toString(),
+                'display_name' => $request->string('display_name')->toString(),
+                'hourly_cost' => (float) $request->input('hourly_cost', 0),
+                'specialties' => array_values(array_filter((array) $request->input('specialties', []))),
+                'status' => $request->string('status')->toString(),
+                'is_assignable' => $request->boolean('is_assignable'),
+                'max_concurrent_orders' => (int) $request->input('max_concurrent_orders', 3),
             ]);
         });
 
-        return redirect()->route('admin.technicians.index')
-            ->with('success', 'Técnico creado correctamente');
+        return redirect()
+            ->route('admin.technicians.index')
+            ->with('success', 'Técnico creado correctamente.')
+            ->with('temporary_credentials', [
+                'email' => $request->string('email')->toString(),
+                'password' => $tempPassword,
+            ]);
     }
 
     public function update(UpdateTechnicianProfileRequest $request, TechnicianProfile $technician): RedirectResponse
@@ -95,7 +111,32 @@ class TechnicianController extends Controller
             'is_assignable' => $request->boolean('is_assignable'),
         ]);
 
+        if ($technician->user) {
+            $technician->user->update([
+                'can_access_billing' => $request->boolean('can_access_billing'),
+                'can_access_inventory' => $request->boolean('can_access_inventory'),
+            ]);
+        }
+
         return back()->with('success', 'Perfil técnico actualizado correctamente.');
+    }
+
+
+    public function updatePermissions(Request $request, TechnicianProfile $technician): RedirectResponse
+    {
+        $this->assertCompanyScope($request, $technician);
+
+        $data = $request->validate([
+            'can_access_billing' => ['nullable', 'boolean'],
+            'can_access_inventory' => ['nullable', 'boolean'],
+        ]);
+
+        $technician->user?->update([
+            'can_access_billing' => (bool) ($data['can_access_billing'] ?? false),
+            'can_access_inventory' => (bool) ($data['can_access_inventory'] ?? false),
+        ]);
+
+        return back()->with('success', 'Permisos del técnico actualizados correctamente.');
     }
 
     public function deactivate(Request $request, TechnicianProfile $technician): RedirectResponse
@@ -119,4 +160,3 @@ class TechnicianController extends Controller
         }
     }
 }
-
