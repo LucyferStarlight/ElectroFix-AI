@@ -35,37 +35,39 @@
         <div class="col-lg-6">
             <div class="card card-ui h-100">
                 <div class="card-body">
-                    <h2 class="h5 fw-bold mb-3">Crear suscripción base</h2>
-                    <form method="post" action="{{ route('admin.subscription.checkout') }}" class="row g-3">
-                        @csrf
-                        <div class="col-12">
-                            <label class="form-label">Plan público</label>
-                            <select class="form-select input-ui" name="plan" required>
-                                <option value="">Selecciona plan...</option>
-                                @foreach($plans as $plan)
-                                    <option value="{{ $plan->name }}">{{ strtoupper($plan->name) }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Periodo</label>
-                            <select class="form-select input-ui" name="billing_period" required>
-                                <option value="monthly">Mensual (7 días trial)</option>
-                                <option value="semiannual">Semestral (15 días trial)</option>
-                                <option value="annual">Anual (15 días trial)</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Payment Method ID (Stripe)</label>
-                            <input class="form-control input-ui" name="payment_method" placeholder="pm_xxx" required>
-                            <small class="text-muted">Usa un método de prueba de Stripe en entorno local.</small>
-                        </div>
-                        <div class="col-12">
-                            <button class="btn btn-ui btn-primary-ui" type="submit">Crear suscripción</button>
-                        </div>
-                    </form>
+                    @env('local')
+                        <h2 class="h5 fw-bold mb-3">Crear suscripción base</h2>
+                        <form method="post" action="{{ route('admin.subscription.checkout') }}" class="row g-3">
+                            @csrf
+                            <div class="col-12">
+                                <label class="form-label">Plan público</label>
+                                <select class="form-select input-ui" name="plan" required>
+                                    <option value="">Selecciona plan...</option>
+                                    @foreach($plans as $plan)
+                                        <option value="{{ $plan->name }}">{{ strtoupper($plan->name) }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Periodo</label>
+                                <select class="form-select input-ui" name="billing_period" required>
+                                    <option value="monthly">Mensual (7 días trial)</option>
+                                    <option value="semiannual">Semestral (15 días trial)</option>
+                                    <option value="annual">Anual (15 días trial)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Payment Method ID (Stripe)</label>
+                                <input class="form-control input-ui" name="payment_method" placeholder="pm_xxx" required>
+                                <small class="text-muted">Usa un método de prueba de Stripe en entorno local.</small>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-ui btn-primary-ui" type="submit">Crear suscripción</button>
+                            </div>
+                        </form>
 
-                    <hr class="my-4">
+                        <hr class="my-4">
+                    @endenv
 
                     <h3 class="h6 fw-bold mb-3">Checkout seguro (Stripe Hosted)</h3>
                     <form method="post" action="{{ route('billing.checkout') }}" class="row g-3">
