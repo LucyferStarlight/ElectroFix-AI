@@ -14,9 +14,6 @@ class EnsureCompanySubscriptionActive
 
     private const ADMIN_ALLOWED_ROUTES_WHEN_INACTIVE = [
         'admin.subscription.edit',
-        'admin.subscription.checkout',
-        'admin.subscription.change',
-        'admin.subscription.cancel',
         'billing.checkout',
         'billing.success',
         'billing.cancel',
