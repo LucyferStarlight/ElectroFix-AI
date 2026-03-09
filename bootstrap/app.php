@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'module_access' => \App\Http\Middleware\EnsureModuleAccess::class,
             'token_ability' => \App\Http\Middleware\EnsureTokenAbility::class,
             'subscription_active' => \App\Http\Middleware\EnsureCompanySubscriptionActive::class,
+            'must_change_password' => \App\Http\Middleware\EnsurePasswordChanged::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

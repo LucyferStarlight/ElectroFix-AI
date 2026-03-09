@@ -11,19 +11,19 @@
         </div>
     </div>
 
+    @if(session('temporary_credentials'))
+        <div class="alert alert-warning">
+            <strong>Técnico creado correctamente.</strong><br>
+            Email: <code>{{ session('temporary_credentials.email') }}</code><br>
+            Contraseña temporal: <code>{{ session('temporary_credentials.password') }}</code><br>
+            <small>Comparte esta contraseña de forma segura. Se muestra una sola vez.</small>
+        </div>
+    @endif
+
     <div class="card card-ui mb-4">
         <div class="card-body">
             <form method="post" action="{{ route('admin.technicians.store') }}" class="row g-3">
                 @csrf
-                <div class="col-md-3">
-                    <label class="form-label">Usuario base (opcional)</label>
-                   <select class="form-select input-ui" name="user_id">
-                      <option value="">Sin usuario ligado</option>
-                       @foreach($users as $user)
-                           <option value="{{ $user->id }}">{{ $user->name }} ({{ strtoupper($user->role) }})</option>
-                        @endforeach
-                    </select>
-                </div>
                 <div class="col-md-2">
                     <label class="form-label">Código</label>
                     <input class="form-control input-ui" name="employee_code" required>
@@ -32,7 +32,14 @@
                     <label class="form-label">Nombre técnico</label>
                     <input class="form-control input-ui" name="display_name" required>
                     @error('display_name')
-                    <div class="text-danger">{{ $message }}</div>
+                        <div class="text-danger">{{ $message }}</div>
+                    @enderror
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Email *</label>
+                    <input type="email" class="form-control input-ui" name="email" value="{{ old('email') }}" required>
+                    @error('email')
+                        <div class="text-danger">{{ $message }}</div>
                     @enderror
                 </div>
                 <div class="col-md-2">
@@ -46,20 +53,11 @@
                 <div class="col-md-2">
                     <label class="form-label">Máx. órdenes</label>
                     <input class="form-control input-ui" type="number" min="1" max="100" value="5" name="max_concurrent_orders" required>
-                    @error('max_concurrent_orders')
-                    <div class="text-danger">{{ $message }}</div>
-                    @enderror
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Costo/hora</label>
                     <input class="form-control input-ui" type="number" step="0.01" min="0" name="hourly_cost" value="0">
-                    @error('hourly_rate')
-                    <div class="text-danger">{{ $message }}</div>
-                    @enderror
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Email *</label>
-                    <input type="email" class="form-control input-ui" name="email" value="{{ old('email') }}" required>
                 <div class="col-md-9">
                     <label class="form-label">Especialidades</label>
                     <input class="form-control input-ui" name="specialties[]" placeholder="Ejemplo: Refrigeración (puedes dejar vacío)">
@@ -69,7 +67,6 @@
                         <input class="form-check-input" type="checkbox" checked name="is_assignable" id="is_assignable">
                         <label class="form-check-label" for="is_assignable">Disponible para asignaciones</label>
                     </div>
-                </div>
                 </div>
                 <div class="col-12">
                     <button class="btn btn-ui btn-primary-ui" type="submit">Crear técnico</button>

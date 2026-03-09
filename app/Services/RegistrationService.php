@@ -54,6 +54,7 @@ class RegistrationService
                 'is_active' => true,
                 'can_access_billing' => true,
                 'can_access_inventory' => true,
+                'must_change_password' => false,
             ]);
 
             $this->createTechnicianProfile($company->id, $admin);
@@ -71,6 +72,7 @@ class RegistrationService
                     'is_active' => true,
                     'can_access_billing' => false,
                     'can_access_inventory' => false,
+                    'must_change_password' => false,
                 ]);
 
                 $this->createTechnicianProfile($company->id, $user);
