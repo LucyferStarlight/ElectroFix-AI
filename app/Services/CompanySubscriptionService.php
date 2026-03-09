@@ -24,11 +24,13 @@ class CompanySubscriptionService
         $existingBusiness = $company->subscription;
         $existingStripe = $company->subscription('default');
         if ($existingBusiness
-            && in_array($existingBusiness->status, ['active', 'trialing', 'past_due'], true)
+            && in_array($existingBusiness->status, [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING, Subscription::STATUS_PAST_DUE], true)
             && $existingStripe
             && ! $existingStripe->canceled()) {
             return $existingBusiness;
         }
+
+        $this->deactivateActiveBusinessSubscription($company);
 
         $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod, (string) $company->currency);
         $plan = $price->plan;
@@ -54,11 +56,11 @@ class CompanySubscriptionService
         ]);
 
         $businessStatus = match ($stripeSubscription->stripe_status) {
-            'trialing' => 'trialing',
-            'active' => 'active',
-            'past_due' => 'past_due',
-            'canceled' => 'canceled',
-            default => 'inactive',
+            'trialing' => Subscription::STATUS_TRIALING,
+            'active' => Subscription::STATUS_ACTIVE,
+            'past_due' => Subscription::STATUS_PAST_DUE,
+            'canceled' => Subscription::STATUS_CANCELED,
+            default => Subscription::STATUS_INACTIVE,
         };
 
         return $this->syncBusinessSubscription($company, $plan->name, $billingPeriod, $stripeSubscription->id, $businessStatus);
@@ -212,6 +214,26 @@ class CompanySubscriptionService
         );
 
         return $business;
+    }
+
+
+    private function deactivateActiveBusinessSubscription(Company $company): void
+    {
+        $business = $company->subscription;
+
+        if (! $business || ! in_array($business->status, [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], true)) {
+            return;
+        }
+
+        $stripeSubscription = $company->subscription('default');
+        if ($stripeSubscription && ! $stripeSubscription->canceled()) {
+            $stripeSubscription->cancelNow();
+        }
+
+        $business->update([
+            'status' => Subscription::STATUS_INACTIVE,
+            'cancel_at_period_end' => false,
+        ]);
     }
 
     private function isDowngrade(string $currentPlan, string $requestedPlan): bool

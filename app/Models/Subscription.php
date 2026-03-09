@@ -3,11 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Subscription extends Model
 {
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_TRIALING = 'trialing';
+
+    public const STATUS_PAST_DUE = 'past_due';
+
+    public const STATUS_CANCELED = 'canceled';
+
+    public const STATUS_INACTIVE = 'inactive';
+
     use HasFactory;
 
     protected $table = 'company_subscriptions';
@@ -45,5 +56,10 @@ class Subscription extends Model
     public function planModel(): BelongsTo
     {
         return $this->belongsTo(Plan::class, 'plan_id');
+    }
+
+    public function scopeAccessAllowed(Builder $query): Builder
+    {
+        return $query->whereIn('status', [self::STATUS_ACTIVE, self::STATUS_TRIALING]);
     }
 }
