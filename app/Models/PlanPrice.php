@@ -15,6 +15,7 @@ class PlanPrice extends Model
         'stripe_price_id',
         'billing_period',
         'currency',
+        'amount',
         'trial_days',
         'is_active',
     ];
@@ -25,6 +26,7 @@ class PlanPrice extends Model
             'is_active' => 'boolean',
             'trial_days' => 'integer',
             'currency' => 'string',
+            'amount' => 'decimal:2',
         ];
     }
 
