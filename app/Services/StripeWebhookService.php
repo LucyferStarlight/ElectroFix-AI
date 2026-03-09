@@ -12,8 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class StripeWebhookService
 {
-    public function __construct(private readonly CompanySubscriptionService $companySubscriptionService)
-    {
+    public function __construct(
+        private readonly CompanySubscriptionService $companySubscriptionService,
+        private readonly StripeSignupService $stripeSignupService
+    ) {
     }
 
     public function handle(array $eventPayload): void
@@ -107,6 +109,10 @@ class StripeWebhookService
         }
 
         $company = $this->syncCompanyByStripeCustomerId($customerId);
+        if (! $company && (string) Arr::get($payload, 'data.object.metadata.signup_source') === 'public_landing') {
+            $company = $this->stripeSignupService->createOrSyncFromCheckout($payload);
+        }
+
         if (! $company) {
             return;
         }
