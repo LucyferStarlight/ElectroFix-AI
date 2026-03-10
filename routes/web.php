@@ -25,6 +25,7 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->na
 Route::get('/register', [RegistrationController::class, 'showForm'])->middleware('guest')->name('register');
 Route::post('/register', [RegistrationController::class, 'store'])->middleware('guest')->name('register.store');
 Route::get('/register/confirmation/{token}', [RegistrationController::class, 'confirmation'])->middleware('guest')->name('register.confirmation');
+Route::get('/register/stripe/success/{token}', [RegistrationController::class, 'stripeSuccess'])->middleware('guest')->name('register.stripe.success');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
 Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');

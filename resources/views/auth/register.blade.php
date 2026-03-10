@@ -132,34 +132,87 @@
                         </section>
 
                         <section data-step="5" class="register-step d-none">
-                            <h2 class="h5 fw-bold mb-3">Plan, periodo y simulación de pago</h2>
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">Plan *</label>
-                                    <select class="form-select input-ui" name="subscription[plan]" required>
-                                        <option value="starter" @selected(old('subscription.plan', 'starter') === 'starter')>Starter</option>
-                                        <option value="pro" @selected(old('subscription.plan') === 'pro')>Pro</option>
-                                        <option value="enterprise" @selected(old('subscription.plan') === 'enterprise')>Enterprise</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Periodo *</label>
-                                    <select class="form-select input-ui" name="subscription[billing_period]" required>
-                                        <option value="monthly" @selected(old('subscription.billing_period', 'monthly') === 'monthly')>Mensual</option>
-                                        <option value="semiannual" @selected(old('subscription.billing_period') === 'semiannual')>Semestral</option>
-                                        <option value="annual" @selected(old('subscription.billing_period') === 'annual')>Anual</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Periodo de prueba</label>
-                                    <select class="form-select input-ui" name="subscription[trial_enabled]" required>
-                                        <option value="1" @selected((string) old('subscription.trial_enabled', '1') === '1')>Sí</option>
-                                        <option value="0" @selected((string) old('subscription.trial_enabled') === '0')>No</option>
-                                    </select>
-                                </div>
+                            <style>
+                                .plan-period-toggle .btn { min-width: 130px; }
+                                .plan-period-toggle .btn.is-active { opacity: 0.6; }
+                                .plan-card { border: 1px solid transparent; }
+                                .plan-card.is-selected { border-color: var(--bs-primary); box-shadow: 0 0 0 1px var(--bs-primary) inset; }
+                                .plan-price { display: flex; align-items: center; gap: 12px; }
+                                .plan-price .plan-price-strike { opacity: 0.6; text-decoration: line-through; font-size: 0.95rem; }
+                                .plan-price .plan-price-main { margin: 0 auto; text-align: center; }
+                                .plan-price .plan-price-current { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+                                .plan-price .plan-price-period { font-size: 0.9rem; color: var(--bs-secondary-color); }
+                            </style>
+
+                            <h2 class="h5 fw-bold mb-3">Plan y periodo</h2>
+                            <p class="text-muted mb-3">Todos los precios incluyen IVA.</p>
+
+                            @php
+                                $selectedPlan = old('subscription.plan', request()->query('plan', 'starter'));
+                                $selectedPeriod = old('subscription.billing_period', request()->query('period', 'monthly'));
+                            @endphp
+                            <input type="hidden" name="subscription[plan]" value="{{ $selectedPlan }}" data-plan-input>
+                            <input type="hidden" name="subscription[billing_period]" value="{{ $selectedPeriod }}" data-period-input>
+                            <input type="hidden" name="subscription[trial_enabled]" value="1">
+
+                            <div class="btn-group plan-period-toggle mb-4" role="group" aria-label="Periodo de pago">
+                                <button type="button" class="btn btn-ui btn-outline-ui {{ $selectedPeriod === 'monthly' ? 'is-active' : '' }}" data-period-button="monthly">Mensual</button>
+                                <button type="button" class="btn btn-ui btn-outline-ui {{ $selectedPeriod === 'semiannual' ? 'is-active' : '' }}" data-period-button="semiannual">Semestral</button>
+                                <button type="button" class="btn btn-ui btn-outline-ui {{ $selectedPeriod === 'annual' ? 'is-active' : '' }}" data-period-button="annual">Anual</button>
                             </div>
-                            <div class="alert alert-ui-info mt-3 mb-0">
-                                Simulación temporal: si no activas trial, el sistema alterna aprobación/rechazo de pago en cada nuevo registro global.
+
+                            <div class="row g-3">
+                                @foreach($plans as $planKey => $plan)
+                                    @php
+                                        $prices = $plan['prices'] ?? [];
+                                        $monthly = data_get($prices, 'monthly.amount');
+                                        $semiannual = data_get($prices, 'semiannual.amount');
+                                        $annual = data_get($prices, 'annual.amount');
+                                        $currentAmount = data_get($prices, $selectedPeriod.'.amount');
+                                        $strikeAmount = null;
+                                        if ($selectedPeriod === 'semiannual' && $monthly) {
+                                            $strikeAmount = $monthly * 6;
+                                        }
+                                        if ($selectedPeriod === 'annual' && $monthly) {
+                                            $strikeAmount = $monthly * 12;
+                                        }
+                                    @endphp
+                                    <div class="col-lg-4">
+                                        <button type="button" class="card card-ui h-100 plan-card w-100 text-start {{ $selectedPlan === $planKey ? 'is-selected' : '' }}" data-plan-card data-plan-name="{{ $planKey }}"
+                                            data-price-monthly="{{ $monthly ?? '' }}"
+                                            data-price-semiannual="{{ $semiannual ?? '' }}"
+                                            data-price-annual="{{ $annual ?? '' }}">
+                                            <div class="card-body d-flex flex-column">
+                                                <h3 class="h5 fw-bold mb-1">{{ $plan['label'] ?? ucfirst($planKey) }}</h3>
+                                                <p class="text-muted small mb-3">Suscripción en Stripe para empezar a operar tu taller.</p>
+
+                                                <div class="plan-price mb-3">
+                                                    <span class="plan-price-strike {{ $strikeAmount ? '' : 'd-none' }}" data-plan-strike>
+                                                        {{ $strikeAmount ? '$'.number_format($strikeAmount, 0) : '' }}
+                                                    </span>
+                                                    <div class="plan-price-main">
+                                                        <div class="plan-price-current" data-plan-current>
+                                                            {{ $currentAmount ? '$'.number_format($currentAmount, 0) : '' }}
+                                                        </div>
+                                                        <div class="plan-price-period" data-plan-period-label>
+                                                            @switch($selectedPeriod)
+                                                                @case('semiannual') MXN / semestre @break
+                                                                @case('annual') MXN / año @break
+                                                                @default MXN / mes
+                                                            @endswitch
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <ul class="text-muted small mb-0">
+                                                    @foreach(($plan['features'] ?? []) as $feature)
+                                                        <li>{{ $feature }}</li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        </button>
+                                    </div>
+                                @endforeach
                             </div>
                         </section>
 
@@ -167,7 +220,7 @@
                             <button type="button" class="btn btn-ui btn-outline-ui" id="prevStepBtn" disabled>Anterior</button>
                             <div class="d-flex gap-2">
                                 <button type="button" class="btn btn-ui btn-primary-ui" id="nextStepBtn">Siguiente</button>
-                                <button type="submit" class="btn btn-ui btn-primary-ui d-none" id="submitBtn">Completar registro</button>
+                                <button type="submit" class="btn btn-ui btn-primary-ui d-none" id="submitBtn">Ir a pago</button>
                             </div>
                         </div>
                     </form>
@@ -194,6 +247,10 @@
     const strategySelect = document.getElementById('workerPasswordStrategy');
     const commonPasswordWrap = document.getElementById('commonPasswordWrap');
     const commonPasswordInput = document.getElementById('commonWorkerPassword');
+    const planCards = Array.from(document.querySelectorAll('[data-plan-card]'));
+    const periodButtons = Array.from(document.querySelectorAll('[data-period-button]'));
+    const planInput = document.querySelector('[data-plan-input]');
+    const periodInput = document.querySelector('[data-period-input]');
 
     let currentStep = 1;
 
@@ -221,6 +278,66 @@
         prevBtn.disabled = currentStep === 1;
         nextBtn.classList.toggle('d-none', currentStep === steps.length);
         submitBtn.classList.toggle('d-none', currentStep !== steps.length);
+    };
+
+    const moneyFormatter = new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+    const periodLabels = {
+        monthly: 'MXN / mes',
+        semiannual: 'MXN / semestre',
+        annual: 'MXN / año',
+    };
+    const setActivePeriod = (period) => {
+        periodButtons.forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.periodButton === period);
+        });
+
+        if (periodInput) {
+            periodInput.value = period;
+        }
+
+        planCards.forEach((card) => {
+            const prices = {
+                monthly: Number(card.dataset.priceMonthly || 0),
+                semiannual: Number(card.dataset.priceSemiannual || 0),
+                annual: Number(card.dataset.priceAnnual || 0),
+            };
+
+            const current = prices[period] || 0;
+            const currentEl = card.querySelector('[data-plan-current]');
+            const strikeEl = card.querySelector('[data-plan-strike]');
+            const labelEl = card.querySelector('[data-plan-period-label]');
+
+            if (currentEl) {
+                currentEl.textContent = moneyFormatter.format(current);
+            }
+            if (labelEl) {
+                labelEl.textContent = periodLabels[period] || 'MXN / periodo';
+            }
+
+            if (period === 'semiannual' || period === 'annual') {
+                const multiplier = period === 'semiannual' ? 6 : 12;
+                const strikeValue = prices.monthly * multiplier;
+                if (strikeEl) {
+                    strikeEl.textContent = moneyFormatter.format(strikeValue);
+                    strikeEl.classList.toggle('d-none', strikeValue <= 0);
+                }
+            } else if (strikeEl) {
+                strikeEl.classList.add('d-none');
+            }
+        });
+    };
+    const setActivePlan = (planName) => {
+        planCards.forEach((card) => {
+            card.classList.toggle('is-selected', card.dataset.planName === planName);
+        });
+        if (planInput) {
+            planInput.value = planName;
+        }
     };
 
     const buildWorkersRows = () => {
@@ -328,9 +445,22 @@
         updateStepState();
     });
 
+    periodButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setActivePeriod(btn.dataset.periodButton));
+    });
+    planCards.forEach((card) => {
+        card.addEventListener('click', () => setActivePlan(card.dataset.planName));
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const initialPlan = params.get('plan') || planInput?.value || 'starter';
+    const initialPeriod = params.get('period') || periodInput?.value || 'monthly';
+
     buildWorkersRows();
     hydrateOldWorkers();
     updateStepState();
+    setActivePlan(initialPlan);
+    setActivePeriod(initialPeriod);
 })();
 </script>
 @endsection

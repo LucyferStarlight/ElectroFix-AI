@@ -26,8 +26,8 @@ class PlanCatalogSeeder extends Seeder
                 'name' => 'pro',
                 'is_public' => true,
                 'ai_enabled' => true,
-                'max_ai_requests' => 80,
-                'max_ai_tokens' => 50000,
+                'max_ai_requests' => 100,
+                'max_ai_tokens' => 60000,
                 'overage_enabled' => false,
                 'overage_price_per_request' => null,
                 'overage_price_per_1000_tokens' => null,
@@ -39,10 +39,12 @@ class PlanCatalogSeeder extends Seeder
                 'max_ai_requests' => 200,
                 'max_ai_tokens' => 120000,
                 'overage_enabled' => true,
-                'overage_price_per_request' => 2.50,
-                'overage_price_per_1000_tokens' => 0.45,
-                'stripe_overage_requests_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_REQUESTS_PRICE_ID') ?: env('stripe_overage_requests_price_id'),
-                'stripe_overage_tokens_price_id' => env('STRIPE_ENTERPRISE_OVERAGE_TOKENS_PRICE_ID') ?: env('stripe_overage_tokens_price_id'),
+                'overage_price_per_request' => 2.00,
+                'overage_price_per_1000_tokens' => 0.00,
+                'stripe_overage_requests_price_id' => env('AI_EXTRA_QUERY_PRICE_ID')
+                    ?: env('STRIPE_ENTERPRISE_OVERAGE_REQUESTS_PRICE_ID')
+                    ?: env('stripe_overage_requests_price_id'),
+                'stripe_overage_tokens_price_id' => null,
             ],
             [
                 'name' => 'developer_test',

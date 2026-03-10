@@ -48,44 +48,141 @@
 </section>
 
 <section id="planes" class="container pb-5">
+    <style>
+        .plan-period-toggle .btn { min-width: 130px; }
+        .plan-period-toggle .btn.is-active { opacity: 0.6; }
+        .plan-price { display: flex; align-items: center; gap: 12px; }
+        .plan-price .plan-price-strike { opacity: 0.6; text-decoration: line-through; font-size: 0.95rem; }
+        .plan-price .plan-price-main { margin: 0 auto; text-align: center; }
+        .plan-price .plan-price-current { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+        .plan-price .plan-price-period { font-size: 0.9rem; color: var(--bs-secondary-color); }
+        .plan-card { position: relative; }
+    </style>
+
+    <div class="text-center mb-4">
+        <h2 class="h4 fw-bold mb-2">Planes y precios</h2>
+        <p class="text-muted mb-3">Todos los precios incluyen IVA.</p>
+        <div class="btn-group plan-period-toggle" role="group" aria-label="Periodo de pago">
+            <button type="button" class="btn btn-ui btn-outline-ui is-active" data-period-button="monthly">Mensual</button>
+            <button type="button" class="btn btn-ui btn-outline-ui" data-period-button="semiannual">Semestral</button>
+            <button type="button" class="btn btn-ui btn-outline-ui" data-period-button="annual">Anual</button>
+        </div>
+    </div>
+
     <div class="row g-3">
         @foreach($plans as $planKey => $plan)
+            @php
+                $prices = $plan['prices'] ?? [];
+                $monthly = data_get($prices, 'monthly.amount');
+                $semiannual = data_get($prices, 'semiannual.amount');
+                $annual = data_get($prices, 'annual.amount');
+            @endphp
             <div class="col-lg-4">
-                <div class="card card-ui h-100">
+                <div class="card card-ui h-100 plan-card" data-plan-card
+                    data-price-monthly="{{ $monthly ?? '' }}"
+                    data-price-semiannual="{{ $semiannual ?? '' }}"
+                    data-price-annual="{{ $annual ?? '' }}">
                     <div class="card-body d-flex flex-column">
-                        <h3 class="h5 fw-bold">{{ $plan['label'] ?? ucfirst($planKey) }}</h3>
-                        <p class="text-muted">Suscripción en Stripe para empezar a operar tu taller.</p>
+                        <h3 class="h5 fw-bold mb-1">{{ $plan['label'] ?? ucfirst($planKey) }}</h3>
+                        <p class="text-muted small mb-3">Suscripción en Stripe para empezar a operar tu taller.</p>
 
-                        <form method="post" action="{{ route('subscribe') }}" class="mt-auto d-grid gap-2">
-                            @csrf
-                            <input type="hidden" name="plan" value="{{ $planKey }}">
-                            <div>
-                                <label class="form-label">Periodo</label>
-                                <select name="billing_period" class="form-select input-ui" required>
-                                    @foreach(($plan['prices'] ?? []) as $period => $priceId)
-                                        @continue(blank($priceId))
-                                        <option value="{{ $period }}">{{ ucfirst($period) }}</option>
-                                    @endforeach
-                                </select>
+                        <div class="plan-price mb-3">
+                            <span class="plan-price-strike d-none" data-plan-strike></span>
+                            <div class="plan-price-main">
+                                <div class="plan-price-current" data-plan-current></div>
+                                <div class="plan-price-period" data-plan-period-label>MXN / mes</div>
                             </div>
-                            <div>
-                                <label class="form-label">Email administrador</label>
-                                <input type="email" name="email" class="form-control input-ui" placeholder="admin@empresa.com" required>
-                            </div>
-                            <div>
-                                <label class="form-label">Nombre de empresa (opcional)</label>
-                                <input type="text" name="company_name" class="form-control input-ui" placeholder="Mi Taller Técnico">
-                            </div>
-                            <div>
-                                <label class="form-label">Nombre administrador (opcional)</label>
-                                <input type="text" name="admin_name" class="form-control input-ui" placeholder="Juan Pérez">
-                            </div>
-                            <button class="btn btn-ui btn-primary-ui" type="submit">Suscribirme con Stripe</button>
-                        </form>
+                        </div>
+
+                        <ul class="text-muted small mb-4">
+                            @foreach(($plan['features'] ?? []) as $feature)
+                                <li>{{ $feature }}</li>
+                            @endforeach
+                        </ul>
+
+                        <div class="mt-auto d-grid gap-2">
+                            <input type="hidden" value="monthly" data-billing-period>
+                            <a class="btn btn-ui btn-primary-ui" data-register-link data-plan="{{ $planKey }}" href="{{ route('register') }}">
+                                Crear cuenta
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
         @endforeach
     </div>
 </section>
+
+<script>
+(() => {
+    const periodButtons = Array.from(document.querySelectorAll('[data-period-button]'));
+    const cards = Array.from(document.querySelectorAll('[data-plan-card]'));
+    const formatter = new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+
+    const periodLabels = {
+        monthly: 'MXN / mes',
+        semiannual: 'MXN / semestre',
+        annual: 'MXN / año',
+    };
+
+    const setActivePeriod = (period) => {
+        periodButtons.forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.periodButton === period);
+        });
+
+        cards.forEach((card) => {
+            const prices = {
+                monthly: Number(card.dataset.priceMonthly || 0),
+                semiannual: Number(card.dataset.priceSemiannual || 0),
+                annual: Number(card.dataset.priceAnnual || 0),
+            };
+
+            const current = prices[period] || 0;
+            const currentEl = card.querySelector('[data-plan-current]');
+            const strikeEl = card.querySelector('[data-plan-strike]');
+            const labelEl = card.querySelector('[data-plan-period-label]');
+            const billingInput = card.querySelector('[data-billing-period]');
+            const registerLink = card.querySelector('[data-register-link]');
+
+            if (currentEl) {
+                currentEl.textContent = formatter.format(current);
+            }
+
+            if (labelEl) {
+                labelEl.textContent = periodLabels[period] || 'MXN / periodo';
+            }
+
+            if (billingInput) {
+                billingInput.value = period;
+            }
+            if (registerLink) {
+                const plan = registerLink.dataset.plan;
+                registerLink.href = `{{ route('register') }}?plan=${encodeURIComponent(plan)}&period=${encodeURIComponent(period)}`;
+            }
+
+            if (period === 'semiannual' || period === 'annual') {
+                const multiplier = period === 'semiannual' ? 6 : 12;
+                const strikeValue = prices.monthly * multiplier;
+                if (strikeEl) {
+                    strikeEl.textContent = formatter.format(strikeValue);
+                    strikeEl.classList.toggle('d-none', strikeValue <= 0);
+                }
+            } else if (strikeEl) {
+                strikeEl.classList.add('d-none');
+            }
+        });
+    };
+
+    periodButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setActivePeriod(btn.dataset.periodButton));
+    });
+
+    setActivePeriod('monthly');
+})();
+</script>
 @endsection
