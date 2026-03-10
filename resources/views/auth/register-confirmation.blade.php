@@ -17,7 +17,11 @@
                         <div class="col-md-6"><strong>Plan:</strong> {{ strtoupper((string) data_get($snapshot, 'subscription.plan')) }}</div>
                         <div class="col-md-6"><strong>Periodo:</strong> {{ strtoupper((string) data_get($snapshot, 'subscription.billing_period')) }}</div>
                         <div class="col-md-6"><strong>Estado suscripción:</strong> {{ strtoupper((string) data_get($snapshot, 'subscription.status')) }}</div>
-                        <div class="col-md-6"><strong>Pago simulado:</strong> {{ strtoupper((string) data_get($snapshot, 'payment_simulation.result')) }}</div>
+                        @if(data_get($snapshot, 'payment.status'))
+                            <div class="col-md-6"><strong>Pago Stripe:</strong> {{ strtoupper((string) data_get($snapshot, 'payment.status')) }}</div>
+                        @elseif(data_get($snapshot, 'payment_simulation.result'))
+                            <div class="col-md-6"><strong>Pago simulado:</strong> {{ strtoupper((string) data_get($snapshot, 'payment_simulation.result')) }}</div>
+                        @endif
                     </div>
 
                     @if(data_get($snapshot, 'workers'))

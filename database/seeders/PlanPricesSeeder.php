@@ -15,6 +15,23 @@ class PlanPricesSeeder extends Seeder
             'semiannual' => 15,
             'annual' => 15,
         ];
+        $amounts = [
+            'starter' => [
+                'monthly' => 399,
+                'semiannual' => 2100,
+                'annual' => 3900,
+            ],
+            'pro' => [
+                'monthly' => 699,
+                'semiannual' => 3900,
+                'annual' => 7500,
+            ],
+            'enterprise' => [
+                'monthly' => 1199,
+                'semiannual' => 6900,
+                'annual' => 12900,
+            ],
+        ];
 
         foreach (['starter', 'pro', 'enterprise'] as $planName) {
             $plan = Plan::query()->where('name', $planName)->first();
@@ -26,6 +43,7 @@ class PlanPricesSeeder extends Seeder
                 $legacyKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $planName, $period));
                 $shortKey = strtoupper(sprintf('%s_%s', $planName, $period));
                 $priceId = (string) (env($legacyKey) ?: env($shortKey) ?: sprintf('price_placeholder_%s_%s', $planName, $period));
+                $amount = $amounts[$planName][$period] ?? null;
 
                 PlanPrice::query()->updateOrCreate(
                     [
@@ -37,6 +55,7 @@ class PlanPricesSeeder extends Seeder
                         'stripe_price_id' => $priceId,
                         'trial_days' => $trialDays,
                         'is_active' => true,
+                        'amount' => $amount,
                     ]
                 );
             }
