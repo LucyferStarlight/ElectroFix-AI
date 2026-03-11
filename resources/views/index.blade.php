@@ -113,6 +113,26 @@
     </div>
 </section>
 
+<section class="container pb-5">
+    <div class="card card-ui">
+        <div class="card-body p-4 p-lg-5 d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div>
+                <h2 class="h4 fw-bold mb-2">Soporte</h2>
+                <p class="text-muted mb-0">Estamos listos para ayudarte por correo o WhatsApp.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-ui btn-outline-ui" href="mailto:{{ config('support.email') }}">
+                    {{ config('support.email') }}
+                </a>
+                @if(config('support.whatsapp_url'))
+                    <a class="btn btn-ui btn-outline-ui" href="{{ config('support.whatsapp_url') }}" target="_blank" rel="noopener">WhatsApp</a>
+                @endif
+                <a class="btn btn-ui btn-primary-ui" href="{{ route('support') }}">Formulario de soporte</a>
+            </div>
+        </div>
+    </div>
+</section>
+
 <script>
 (() => {
     const periodButtons = Array.from(document.querySelectorAll('[data-period-button]'));
