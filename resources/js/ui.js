@@ -34,4 +34,44 @@ document.addEventListener('DOMContentLoaded', () => {
       applyTheme(nextTheme);
     });
   });
+
+  const alertsRoot = document.querySelector('[data-alerts-root]');
+  if (alertsRoot) {
+    const alerts = Array.from(alertsRoot.querySelectorAll('.alert'));
+    if (alerts.length) {
+      const sessionId = alertsRoot.dataset.sessionId;
+      const sessionDismissKey = sessionId ? `electrofix-session-alert-dismissed:${sessionId}` : '';
+      const sessionAlert = alertsRoot.querySelector('[data-session-alert]');
+      if (sessionAlert && sessionDismissKey && localStorage.getItem(sessionDismissKey)) {
+        sessionAlert.remove();
+      }
+
+      const removeAlerts = () => {
+        alerts.forEach((alert) => {
+          if (alert.hasAttribute('data-session-alert') && sessionDismissKey) {
+            localStorage.setItem(sessionDismissKey, '1');
+          }
+          alert.remove();
+        });
+      };
+
+      setTimeout(removeAlerts, 60000);
+      window.addEventListener('pagehide', removeAlerts, { once: true });
+      window.addEventListener('beforeunload', removeAlerts, { once: true });
+
+      alertsRoot.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.matches('[data-alert-dismiss]')) {
+          const alert = target.closest('.alert');
+          if (alert) {
+            if (alert.hasAttribute('data-session-alert') && sessionDismissKey) {
+              localStorage.setItem(sessionDismissKey, '1');
+            }
+            alert.remove();
+          }
+        }
+      });
+    }
+  }
 });

@@ -7,8 +7,8 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - Laravel 12
 - Blade + Bootstrap 5 + JavaScript vanilla
 - MySQL (XAMPP compatible)
-- Stripe (estructura backend, sin credenciales reales)
-- IA diagnóstica (stub local preparado para proveedor real)
+- Stripe (Checkout + webhooks)
+- IA diagnóstica (Gemini con fallback local si no hay API key)
 
 ## Arquitectura funcional actual
 - Multiempresa por `company_id`.
@@ -38,7 +38,7 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - Se solicita en creación de orden (checkbox).
 - Máximo una ejecución por orden (`ai_diagnosed_at`).
 - Límite de síntomas: 600 caracteres.
-- Planes habilitados: `enterprise`, `developer_test`.
+- Planes habilitados: `enterprise`, `developer_test` (según `ai_enabled` en plan).
 - Límites mensuales por empresa:
   - `enterprise`: 200 consultas / 120,000 tokens estimados
   - `developer_test`: 500 consultas / 500,000 tokens estimados
@@ -46,6 +46,9 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - Costo sugerido condicional:
   - Solo reparación (mano de obra), o
   - Reparación + reemplazo (piezas + mano de obra), según bandera IA.
+- Proveedor:
+  - `GEMINI_API_KEY` habilita Gemini.
+  - Sin API key, se usa heurística local (fallback).
 
 ### Facturación
 - Flujo separado por `Venta`, `Mixto`, `Reparación`.
@@ -60,6 +63,7 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - `inventory_items`, `inventory_movements`
 - `billing_documents`, `billing_document_items`
 - `company_ai_usages`
+- `support_requests`
 
 ## Instalación local (XAMPP + MySQL)
 1. Clonar repositorio.
@@ -131,6 +135,21 @@ git push origin <tu-rama>
 ## Licencia
 Este proyecto no se distribuye bajo MIT para uso final del producto.
 Revisar [LICENSE](LICENSE) para términos de uso autorizados.
+
+## Soporte
+- Formulario: `/support`
+- Correo: `SUPPORT_EMAIL` (default `proyectosweb.haroldadir@gmail.com`)
+- WhatsApp: `SUPPORT_WHATSAPP_URL`
+- Sitio: `ARAKATADEVS_URL`
+
+Variables nuevas en `.env`:
+```env
+SUPPORT_EMAIL=proyectosweb.haroldadir@gmail.com
+SUPPORT_WHATSAPP_URL=https://wa.me/message/GKUTR2MK5DXIG1
+ARAKATADEVS_URL=https://arakatadevs.com.mx
+```
+
+Nota: el correo se envía usando el mailer configurado en `MAIL_MAILER`.
 
 
 ## Stripe en local (sin fallos)
