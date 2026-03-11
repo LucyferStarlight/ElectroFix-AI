@@ -11,6 +11,7 @@ use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\SubscriptionController as PublicSubscriptionController;
+use App\Http\Controllers\SupportController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
 use App\Http\Controllers\Worker\BillingController as WorkerBillingController;
@@ -29,6 +30,8 @@ Route::get('/register/stripe/success/{token}', [RegistrationController::class, '
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
 Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');
+Route::get('/support', [SupportController::class, 'show'])->name('support');
+Route::post('/support', [SupportController::class, 'store'])->name('support.store');
 Route::post('/subscribe', [PublicSubscriptionController::class, 'subscribe'])->middleware('guest')->name('subscribe');
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 

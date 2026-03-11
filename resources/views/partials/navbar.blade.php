@@ -21,6 +21,7 @@
                         <li class="nav-item"><a class="nav-link" href="{{ route('developer.companies.index') }}">Empresas</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ route('developer.subscriptions') }}">Suscripciones</a></li>
                     @endif
+                    <li class="nav-item"><a class="nav-link" href="{{ route('support') }}">Soporte</a></li>
                 @endauth
             </ul>
 
@@ -37,6 +38,7 @@
                 @else
                     <a class="btn btn-ui btn-primary-ui btn-sm" href="{{ route('login') }}">Acceso</a>
                     <a class="btn btn-ui btn-outline-ui btn-sm" href="{{ route('register') }}">Crear cuenta</a>
+                    <a class="btn btn-ui btn-ghost btn-sm" href="{{ route('support') }}">Soporte</a>
                 @endauth
             </div>
         </div>
