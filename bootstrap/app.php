@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'stripe/webhook',
         ]);
 
+        $middleware->throttleApi('api');
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureRole::class,
             'module_access' => \App\Http\Middleware\EnsureModuleAccess::class,

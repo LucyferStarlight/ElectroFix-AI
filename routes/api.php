@@ -14,7 +14,8 @@ use App\Support\ApiAbility;
 use Illuminate\Support\Facades\Route;
 
 
-Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook']);
+Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook'])
+    ->withoutMiddleware('throttle:api');
 
 Route::middleware(['auth:sanctum'])->group(function (): void {
 });
@@ -34,7 +35,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/orders', [OrderApiController::class, 'index'])->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::post('/orders', [OrderApiController::class, 'store'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
         Route::patch('/orders/{order}/status', [OrderApiController::class, 'updateStatus'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
-        Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])->middleware('token_ability:'.ApiAbility::AI_USE);
+        Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])
+            ->middleware(['token_ability:'.ApiAbility::AI_USE, 'throttle:ai-diagnostics']);
 
         Route::get('/inventory/items', [InventoryItemApiController::class, 'index'])->middleware('token_ability:'.ApiAbility::INVENTORY_WRITE);
         Route::post('/inventory/items', [InventoryItemApiController::class, 'store'])->middleware('token_ability:'.ApiAbility::INVENTORY_WRITE);

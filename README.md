@@ -6,7 +6,9 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - PHP 8.3+
 - Laravel 12
 - Blade + Bootstrap 5 + JavaScript vanilla
-- MySQL (XAMPP compatible)
+- MySQL (XAMPP compatible / Docker)
+- Redis (cache + colas)
+- Docker + Nginx (opcional)
 - Stripe (Checkout + webhooks)
 - IA diagnóstica (Gemini con fallback local si no hay API key)
 
@@ -95,6 +97,27 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
    php artisan serve
    ```
 
+## Instalación con Docker (recomendado)
+1. Crear `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Levantar servicios:
+   ```bash
+   docker compose up -d --build
+   ```
+3. Generar key y migrar:
+   ```bash
+   docker compose exec app php artisan key:generate
+   docker compose exec app php artisan migrate --force
+   ```
+4. (Opcional) Seeders:
+   ```bash
+   docker compose exec app php artisan db:seed --force
+   ```
+5. Acceder a la app:
+   - `http://localhost:8080`
+
 ## Credenciales demo (seeders)
 - Developer:
   - email: `developer@electrofix.ai`
@@ -121,15 +144,23 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 php artisan test
 ```
 
-Nota: si el entorno no tiene `pdo_sqlite`, las pruebas con `RefreshDatabase` fallarán con driver sqlite en memoria. En ese caso:
-- habilitar extensión sqlite para CLI PHP, o
-- ajustar `phpunit.xml` para usar MySQL de pruebas.
+Nota: las pruebas usan MySQL con variables `DB_TEST_*` (ver `phpunit.xml` y `.env.testing`).
 
 ## Preparación para commit/push
 ```bash
 git add .
 git commit -m "feat: complete SaaS modules (orders, inventory, billing, AI limits) and delivery docs"
 git push origin <tu-rama>
+```
+
+## Deploy rápido
+```bash
+./deploy.sh
+```
+
+Opcional con seeders:
+```bash
+./deploy.sh --seed
 ```
 
 ## Licencia
