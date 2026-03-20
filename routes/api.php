@@ -23,7 +23,7 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/tokens', [AuthTokenController::class, 'store']);
 
-    Route::middleware(['auth:sanctum', 'subscription_active'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'company_active', 'subscription_active'])->group(function (): void {
         Route::get('/me', [ProfileApiController::class, 'show']);
 
         Route::get('/customers', [CustomerApiController::class, 'index'])->middleware('token_ability:'.ApiAbility::ORDERS_READ);

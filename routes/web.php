@@ -4,10 +4,10 @@ use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\TechnicianController;
 use App\Http\Controllers\Admin\WorkerController;
+use App\Http\Controllers\Auth\CompanyRegistrationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController as StripeBillingController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\Developer\CompanyInsightsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\SubscriptionController as PublicSubscriptionController;
@@ -23,10 +23,9 @@ Route::get('/', [PublicSubscriptionController::class, 'index'])->name('landing')
 Route::view('/terms-and-conditions', 'terms')->name('terms');
 Route::get('/login', [AuthController::class, 'showLoginForm'])->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login.store');
-Route::get('/register', [RegistrationController::class, 'showForm'])->middleware('guest')->name('register');
-Route::post('/register', [RegistrationController::class, 'store'])->middleware('guest')->name('register.store');
-Route::get('/register/confirmation/{token}', [RegistrationController::class, 'confirmation'])->middleware('guest')->name('register.confirmation');
-Route::get('/register/stripe/success/{token}', [RegistrationController::class, 'stripeSuccess'])->middleware('guest')->name('register.stripe.success');
+Route::get('/register', [CompanyRegistrationController::class, 'showForm'])->middleware('guest')->name('register');
+Route::post('/register', [CompanyRegistrationController::class, 'store'])->middleware('guest')->name('register.store');
+Route::get('/onboarding/success', [CompanyRegistrationController::class, 'success'])->middleware('guest')->name('onboarding.success');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/force-password', [AuthController::class, 'showForcePasswordForm'])->middleware('auth')->name('password.force.edit');
 Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])->middleware('auth')->name('password.force.update');
@@ -37,10 +36,13 @@ Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
-Route::middleware(['auth', 'must_change_password', 'subscription_active'])->group(function (): void {
+Route::middleware(['auth', 'must_change_password'])->group(function (): void {
+    Route::get('/account/suspended', [CompanyRegistrationController::class, 'suspended'])->name('account.suspended');
+    Route::post('/account/suspended/checkout', [CompanyRegistrationController::class, 'retryCheckout'])->name('onboarding.retry');
+
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::middleware('role:worker,admin,developer')->group(function (): void {
+    Route::middleware(['role:worker,admin,developer', 'company_active', 'subscription_active'])->group(function (): void {
         Route::get('/dashboard/worker', [DashboardController::class, 'worker'])->name('dashboard.worker');
         Route::get('/worker/orders', [OrderController::class, 'index'])->name('worker.orders');
         Route::post('/worker/orders', [OrderController::class, 'store'])->name('worker.orders.store');
@@ -54,7 +56,7 @@ Route::middleware(['auth', 'must_change_password', 'subscription_active'])->grou
         Route::post('/worker/equipments', [EquipmentController::class, 'store'])->name('worker.equipments.store');
     });
 
-    Route::middleware('role:worker,admin,developer')->group(function (): void {
+    Route::middleware(['role:worker,admin,developer', 'company_active', 'subscription_active'])->group(function (): void {
         Route::get('/worker/inventory', [InventoryController::class, 'index'])
             ->middleware('module_access:inventory')
             ->name('worker.inventory');
@@ -84,7 +86,7 @@ Route::middleware(['auth', 'must_change_password', 'subscription_active'])->grou
             ->name('worker.billing.pdf');
     });
 
-    Route::middleware('role:admin')->group(function (): void {
+    Route::middleware(['role:admin', 'company_active', 'subscription_active'])->group(function (): void {
         Route::get('/dashboard/admin', [DashboardController::class, 'admin'])->name('dashboard.admin');
         Route::get('/admin/company', [CompanyController::class, 'edit'])->name('admin.company.edit');
         Route::put('/admin/company', [CompanyController::class, 'update'])->name('admin.company.update');
@@ -105,7 +107,7 @@ Route::middleware(['auth', 'must_change_password', 'subscription_active'])->grou
         Route::get('/billing/portal', [StripeBillingController::class, 'portal'])->name('billing.portal');
     });
 
-    Route::middleware('role:developer')->group(function (): void {
+    Route::middleware(['role:developer', 'company_active', 'subscription_active'])->group(function (): void {
         Route::get('/dashboard/developer', [DashboardController::class, 'developer'])->name('dashboard.developer');
         Route::get('/developer/companies', [CompanyInsightsController::class, 'index'])->name('developer.companies.index');
         Route::get('/developer/companies/{company}', [CompanyInsightsController::class, 'show'])->name('developer.companies.show');

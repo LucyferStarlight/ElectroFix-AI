@@ -28,6 +28,13 @@ class Company extends Model
         'postal_code',
         'currency',
         'vat_percentage',
+        'status',
+        'pending_attempts',
+        'pending_expires_at',
+        'pending_last_failed_at',
+        'pending_plan',
+        'pending_billing_period',
+        'stripe_checkout_session_id',
         'stripe_id',
         'pm_type',
         'pm_last_four',
@@ -40,6 +47,8 @@ class Company extends Model
         return [
             'vat_percentage' => 'decimal:2',
             'trial_ends_at' => 'datetime',
+            'pending_expires_at' => 'datetime',
+            'pending_last_failed_at' => 'datetime',
         ];
     }
 

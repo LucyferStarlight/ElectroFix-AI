@@ -21,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(\Stripe\StripeClient::class, function (): \Stripe\StripeClient {
+            return new \Stripe\StripeClient((string) config('services.stripe.secret'));
+        });
+
         $this->app->bind(AiDiagnosticProvider::class, function (): AiDiagnosticProvider {
             $provider = (string) config('ai.provider', env('AI_PROVIDER', 'gemini'));
             $apiKey = (string) config('services.gemini.api_key');

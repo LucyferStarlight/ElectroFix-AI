@@ -25,6 +25,13 @@ class CompanyFactory extends Factory
             'country' => 'MX',
             'postal_code' => fake()->postcode(),
             'currency' => 'MXN',
+            'status' => 'active',
+            'pending_attempts' => 0,
+            'pending_expires_at' => null,
+            'pending_last_failed_at' => null,
+            'pending_plan' => null,
+            'pending_billing_period' => 'monthly',
+            'stripe_checkout_session_id' => null,
             'notes' => fake()->sentence(),
         ];
     }

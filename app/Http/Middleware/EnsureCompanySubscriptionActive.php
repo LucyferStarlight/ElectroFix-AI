@@ -30,6 +30,11 @@ class EnsureCompanySubscriptionActive
         }
 
         $subscription = $user->company?->subscription;
+        $companyStatus = $user->company?->status;
+
+        if ($companyStatus && $companyStatus !== 'active') {
+            return $next($request);
+        }
 
         if (! $subscription) {
             return $this->deny($request, $user->role, 'No existe una suscripción activa para tu empresa.');

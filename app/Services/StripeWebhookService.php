@@ -6,9 +6,12 @@ use App\Models\Company;
 use App\Models\PlanPrice;
 use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
+use App\Models\User;
+use App\Mail\CompanyWelcomeMail;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class StripeWebhookService
 {
@@ -105,12 +108,16 @@ class StripeWebhookService
         $subscriptionId = (string) Arr::get($payload, 'data.object.subscription');
         $plan = (string) Arr::get($payload, 'data.object.metadata.plan');
         $billingPeriod = (string) Arr::get($payload, 'data.object.metadata.billing_period');
+        $companyId = (int) Arr::get($payload, 'data.object.metadata.company_id', 0);
 
         if ($customerId === '' || $subscriptionId === '') {
             return;
         }
 
-        $company = $this->syncCompanyByStripeCustomerId($customerId);
+        $company = $companyId > 0 ? Company::query()->find($companyId) : null;
+        if (! $company) {
+            $company = $this->syncCompanyByStripeCustomerId($customerId);
+        }
         if (! $company && (string) Arr::get($payload, 'data.object.metadata.signup_source') === 'public_landing') {
             $company = $this->stripeSignupService->createOrSyncFromCheckout($payload);
         }
@@ -172,6 +179,29 @@ class StripeWebhookService
             );
         }
 
+        if ($company->stripe_id !== $customerId) {
+            $company->update(['stripe_id' => $customerId]);
+        }
+
+        $company->update([
+            'status' => 'active',
+            'pending_attempts' => 0,
+            'pending_expires_at' => null,
+            'pending_last_failed_at' => null,
+            'pending_plan' => null,
+            'pending_billing_period' => null,
+            'stripe_checkout_session_id' => null,
+        ]);
+
+        $admin = User::query()
+            ->where('company_id', $company->id)
+            ->where('role', 'admin')
+            ->first();
+
+        if ($admin) {
+            Mail::to($admin->email)->queue(new CompanyWelcomeMail($company, $plan ?: $company->subscription?->plan ?? 'starter'));
+        }
+
         Log::info('ElectroFix billing notification: checkout completed', [
             'company_id' => $company->id,
             'stripe_subscription_id' => $subscriptionId,
@@ -201,9 +231,41 @@ class StripeWebhookService
             return;
         }
 
-        Subscription::query()
+        $subscription = Subscription::query()
             ->where('stripe_subscription_id', $stripeSubscriptionId)
-            ->update(['status' => Subscription::STATUS_PAST_DUE]);
+            ->first();
+
+        if ($subscription) {
+            $subscription->update(['status' => Subscription::STATUS_PAST_DUE]);
+        }
+
+        $company = $subscription?->company;
+        if ($company) {
+            $attempts = (int) $company->pending_attempts + 1;
+
+            if ($attempts >= 4) {
+                User::query()->where('company_id', $company->id)->forceDelete();
+                $company->delete();
+
+                return;
+            }
+
+            $days = match ($attempts) {
+                1 => 7,
+                2 => 4,
+                3 => 1,
+                default => 1,
+            };
+
+            $company->update([
+                'status' => 'suspended',
+                'pending_attempts' => $attempts,
+                'pending_last_failed_at' => now(),
+                'pending_expires_at' => now()->addDays($days),
+                'pending_plan' => $company->pending_plan ?: $subscription?->plan,
+                'pending_billing_period' => $company->pending_billing_period ?: $subscription?->billing_period,
+            ]);
+        }
 
         Log::warning('ElectroFix billing notification: payment failed', [
             'stripe_subscription_id' => $stripeSubscriptionId,
