@@ -48,9 +48,9 @@ class SubscriptionController extends Controller
             ],
         ];
         $labelMap = [
-            'starter' => 'Starter',
-            'pro' => 'Pro (Profesional)',
-            'enterprise' => 'Enterprise (Empresarial)',
+            'starter' => (string) config('plans.starter.label', 'Básico'),
+            'pro' => (string) config('plans.pro.label', 'Profesional'),
+            'enterprise' => (string) config('plans.enterprise.label', 'Empresarial'),
         ];
 
         $orderedPlans = [];

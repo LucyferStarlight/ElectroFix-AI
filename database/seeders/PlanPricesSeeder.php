@@ -15,24 +15,6 @@ class PlanPricesSeeder extends Seeder
             'semiannual' => 15,
             'annual' => 15,
         ];
-        $amounts = [
-            'starter' => [
-                'monthly' => 399,
-                'semiannual' => 2100,
-                'annual' => 3900,
-            ],
-            'pro' => [
-                'monthly' => 699,
-                'semiannual' => 3900,
-                'annual' => 7500,
-            ],
-            'enterprise' => [
-                'monthly' => 1199,
-                'semiannual' => 6900,
-                'annual' => 12900,
-            ],
-        ];
-
         foreach (['starter', 'pro', 'enterprise'] as $planName) {
             $plan = Plan::query()->where('name', $planName)->first();
             if (! $plan) {
@@ -43,7 +25,7 @@ class PlanPricesSeeder extends Seeder
                 $legacyKey = strtoupper(sprintf('STRIPE_PRICE_%s_%s', $planName, $period));
                 $shortKey = strtoupper(sprintf('%s_%s', $planName, $period));
                 $priceId = (string) (env($legacyKey) ?: env($shortKey) ?: sprintf('price_placeholder_%s_%s', $planName, $period));
-                $amount = $amounts[$planName][$period] ?? null;
+                $amount = $this->resolveAmount($planName, $period);
 
                 PlanPrice::query()->updateOrCreate(
                     [
@@ -60,5 +42,13 @@ class PlanPricesSeeder extends Seeder
                 );
             }
         }
+    }
+
+    private function resolveAmount(string $planName, string $period): ?float
+    {
+        $key = strtoupper(sprintf('PLAN_AMOUNT_%s_%s', $planName, $period));
+        $val = env($key);
+
+        return is_numeric($val) ? (float) $val : null;
     }
 }

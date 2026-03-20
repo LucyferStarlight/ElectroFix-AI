@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.guest')
 
 @section('title', 'Registro | ElectroFix-AI')
 
@@ -47,15 +47,31 @@
 
                         <div class="mt-4">
                             <h2 class="h6 fw-bold mb-3">Selecciona tu plan</h2>
+                            <div class="btn-group plan-period-toggle mb-3" role="group" aria-label="Periodo de pago">
+                                <button type="button" class="btn btn-ui btn-outline-ui" data-period-button="monthly">Mensual</button>
+                                <button type="button" class="btn btn-ui btn-outline-ui" data-period-button="semiannual">Semestral</button>
+                                <button type="button" class="btn btn-ui btn-outline-ui" data-period-button="annual">Anual</button>
+                            </div>
+                            <input type="hidden" name="billing_period" value="{{ old('billing_period', $selectedPeriod ?? 'monthly') }}" data-billing-period-input>
                             <div class="row g-3">
                                 @foreach($plans as $key => $plan)
+                                    @php
+                                        $prices = $plan['prices'] ?? [];
+                                        $monthly = $prices['monthly'] ?? null;
+                                        $semiannual = $prices['semiannual'] ?? null;
+                                        $annual = $prices['annual'] ?? null;
+                                    @endphp
                                     <div class="col-md-4">
-                                        <label class="card card-ui h-100 p-3 border">
+                                        <label class="card card-ui h-100 p-3 border plan-card"
+                                               data-plan-card
+                                               data-price-monthly="{{ $monthly ?? '' }}"
+                                               data-price-semiannual="{{ $semiannual ?? '' }}"
+                                               data-price-annual="{{ $annual ?? '' }}">
                                             <div class="d-flex align-items-start gap-2">
-                                                <input class="form-check-input mt-1" type="radio" name="plan" value="{{ $key }}" @checked(old('plan', 'starter') === $key) required>
+                                                <input class="form-check-input mt-1" type="radio" name="plan" value="{{ $key }}" @checked(old('plan', $selectedPlan ?? 'starter') === $key) required>
                                                 <div>
                                                     <h3 class="h6 fw-bold mb-1">{{ $plan['label'] }}</h3>
-                                                    <p class="text-muted mb-2">${{ number_format((float) $plan['price'], 0) }} MXN / mes</p>
+                                                    <p class="text-muted mb-2" data-plan-price-text>Precio a confirmar</p>
                                                     <ul class="small text-muted mb-0">
                                                         @foreach($plan['features'] as $feature)
                                                             <li>{{ $feature }}</li>
@@ -88,4 +104,55 @@
         </div>
     </div>
 </div>
+<script>
+(() => {
+    const periodButtons = Array.from(document.querySelectorAll('[data-period-button]'));
+    const cards = Array.from(document.querySelectorAll('[data-plan-card]'));
+    const periodInput = document.querySelector('[data-billing-period-input]');
+    const formatter = new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+    const periodLabels = {
+        monthly: 'MXN / mes',
+        semiannual: 'MXN / semestre',
+        annual: 'MXN / año',
+    };
+    const selectedPeriod = periodInput?.value || 'monthly';
+
+    const setActivePeriod = (period) => {
+        periodButtons.forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.periodButton === period);
+        });
+
+        if (periodInput) {
+            periodInput.value = period;
+        }
+
+        cards.forEach((card) => {
+            const prices = {
+                monthly: Number(card.dataset.priceMonthly || 0),
+                semiannual: Number(card.dataset.priceSemiannual || 0),
+                annual: Number(card.dataset.priceAnnual || 0),
+            };
+            const current = prices[period] || 0;
+            const label = periodLabels[period] || 'MXN / periodo';
+            const priceEl = card.querySelector('[data-plan-price-text]');
+            if (priceEl) {
+                priceEl.textContent = current > 0
+                    ? `${formatter.format(current)} ${label}`
+                    : 'Precio a confirmar';
+            }
+        });
+    };
+
+    periodButtons.forEach((btn) => {
+        btn.addEventListener('click', () => setActivePeriod(btn.dataset.periodButton));
+    });
+
+    setActivePeriod(selectedPeriod);
+})();
+</script>
 @endsection

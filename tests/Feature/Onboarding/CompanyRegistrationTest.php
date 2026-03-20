@@ -5,6 +5,7 @@ namespace Tests\Feature\Onboarding;
 use App\Mail\CompanyWelcomeMail;
 use App\Models\Company;
 use App\Models\Plan;
+use App\Models\PlanPrice;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
@@ -20,6 +21,7 @@ class CompanyRegistrationTest extends TestCase
 
     public function test_valid_form_creates_pending_company(): void
     {
+        $this->createPublicPlan('starter');
         $this->mockStripeCheckout();
 
         $response = $this->post(route('register.store'), [
@@ -42,6 +44,7 @@ class CompanyRegistrationTest extends TestCase
 
     public function test_invalid_email_returns_validation_error(): void
     {
+        $this->createPublicPlan('starter');
         $this->mockStripeCheckout();
 
         $response = $this->from(route('register'))
@@ -61,6 +64,7 @@ class CompanyRegistrationTest extends TestCase
 
     public function test_terms_are_required(): void
     {
+        $this->createPublicPlan('starter');
         $this->mockStripeCheckout();
 
         $response = $this->from(route('register'))
@@ -79,6 +83,7 @@ class CompanyRegistrationTest extends TestCase
 
     public function test_form_does_not_require_rfc_fields(): void
     {
+        $this->createPublicPlan('starter');
         $this->mockStripeCheckout();
 
         $response = $this->post(route('register.store'), [
@@ -144,6 +149,67 @@ class CompanyRegistrationTest extends TestCase
         });
     }
 
+    public function test_register_shows_plans_from_database(): void
+    {
+        $starter = Plan::factory()->create([
+            'name' => 'starter',
+            'is_public' => true,
+            'ai_enabled' => false,
+        ]);
+
+        PlanPrice::factory()->create([
+            'plan_id' => $starter->id,
+            'billing_period' => 'monthly',
+            'amount' => 399,
+            'is_active' => true,
+            'currency' => 'mxn',
+        ]);
+
+        $response = $this->get(route('register'));
+
+        $response->assertOk();
+        $response->assertSee('Básico');
+        $response->assertSee('399');
+    }
+
+    public function test_register_preselects_plan_from_query_string(): void
+    {
+        $this->createPublicPlan('starter');
+        $this->createPublicPlan('pro');
+        $this->createPublicPlan('enterprise');
+
+        $response = $this->get(route('register').'?plan=enterprise');
+
+        $response->assertOk();
+        $response->assertSee('enterprise');
+    }
+
+    public function test_index_shows_fallback_when_no_plans_in_db(): void
+    {
+        $response = $this->get(route('landing'));
+
+        $response->assertOk();
+        $response->assertSee('Planes no disponibles');
+    }
+
+    public function test_register_shows_plan_with_null_price(): void
+    {
+        $starter = $this->createPublicPlan('starter');
+
+        PlanPrice::factory()->create([
+            'plan_id' => $starter->id,
+            'billing_period' => 'monthly',
+            'amount' => null,
+            'is_active' => true,
+            'currency' => 'mxn',
+        ]);
+
+        $response = $this->get(route('register'));
+
+        $response->assertOk();
+        $response->assertSee('Precio a confirmar');
+    }
+
     public function test_pending_company_is_redirected_by_middleware(): void
     {
         $company = Company::factory()->create(['status' => 'pending_payment']);
@@ -170,6 +236,8 @@ class CompanyRegistrationTest extends TestCase
 
     private function mockStripeCheckout(): void
     {
+        config()->set('stripe.plans.starter.prices.monthly', 'price_test_123');
+
         $mock = Mockery::mock(StripeCheckoutService::class);
         $mock->shouldReceive('createCustomer')->andReturn('cus_test_123');
         $mock->shouldReceive('createCheckoutSession')->andReturn([
@@ -178,5 +246,14 @@ class CompanyRegistrationTest extends TestCase
         ]);
 
         $this->app->instance(StripeCheckoutService::class, $mock);
+    }
+
+    private function createPublicPlan(string $name): Plan
+    {
+        return Plan::factory()->create([
+            'name' => $name,
+            'is_public' => true,
+            'ai_enabled' => $name !== 'starter',
+        ]);
     }
 }

@@ -2,7 +2,7 @@
 
 return [
     'starter' => [
-        'label' => 'Starter',
+        'label' => 'Básico',
         'price' => env('PLAN_PRICE_STARTER', 299),
         'ai_enabled' => false,
         'features' => [
@@ -13,7 +13,7 @@ return [
         ],
     ],
     'pro' => [
-        'label' => 'Pro',
+        'label' => 'Profesional',
         'price' => env('PLAN_PRICE_PRO', 599),
         'ai_enabled' => false,
         'features' => [
@@ -24,7 +24,7 @@ return [
         ],
     ],
     'enterprise' => [
-        'label' => 'Enterprise',
+        'label' => 'Empresarial',
         'price' => env('PLAN_PRICE_ENTERPRISE', 999),
         'ai_enabled' => true,
         'features' => [

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\TechnicianProfile;
 use App\Models\User;
+use App\Services\PlanCatalogService;
 use App\Services\StripeCheckoutService;
 use App\Support\TechnicianStatus;
 use Illuminate\Http\RedirectResponse;
@@ -15,28 +16,91 @@ use Illuminate\Validation\Rule;
 
 class CompanyRegistrationController extends Controller
 {
-    public function __construct(private readonly StripeCheckoutService $stripeCheckoutService)
+
+    public function showForm(PlanCatalogService $planCatalogService, Request $request)
     {
+        $featureMap = [
+            'starter' => [
+                'Hasta 5 técnicos',
+                'Hasta 75 órdenes activas',
+                'Inventario',
+                'Facturación',
+                'Gestión de clientes',
+                'Estadísticas básicas',
+                'Sin acceso a IA',
+            ],
+            'pro' => [
+                'Hasta 100 técnicos',
+                'Hasta 500 órdenes activas',
+                'Inventario completo',
+                'Facturación integrada',
+                'Estadísticas',
+                'IA de diagnóstico ARIS incluida',
+                '100 consultas IA / mes',
+            ],
+            'enterprise' => [
+                'Técnicos ilimitados',
+                'Órdenes ilimitadas',
+                'Inventario avanzado',
+                'Facturación completa',
+                'Reportes avanzados',
+                'IA de diagnóstico ARIS incluida',
+                '200 consultas IA / mes',
+                'Consultas adicionales disponibles',
+            ],
+        ];
+
+        $labelMap = [
+            'starter' => (string) config('plans.starter.label', 'Básico'),
+            'pro' => (string) config('plans.pro.label', 'Profesional'),
+            'enterprise' => (string) config('plans.enterprise.label', 'Empresarial'),
+        ];
+
+        $plans = [];
+        $publicPlans = $planCatalogService->publicPlans();
+        foreach ($publicPlans as $plan) {
+            $name = (string) $plan->name;
+            $prices = [
+                'monthly' => null,
+                'semiannual' => null,
+                'annual' => null,
+            ];
+            foreach ($plan->prices as $price) {
+                $period = (string) $price->billing_period;
+                if (array_key_exists($period, $prices)) {
+                    $prices[$period] = $price->amount !== null ? (float) $price->amount : null;
+                }
+            }
+
+            $plans[$name] = [
+                'label' => $labelMap[$name] ?? ucfirst($name),
+                'price' => $prices['monthly'],
+                'prices' => $prices,
+                'features' => $featureMap[$name] ?? [],
+                'ai_enabled' => (bool) $plan->ai_enabled,
+            ];
+        }
+
+        $selectedPlan = (string) $request->query('plan', 'starter');
+        $selectedPeriod = (string) $request->query('period', 'monthly');
+        if (! in_array($selectedPeriod, ['monthly', 'semiannual', 'annual'], true)) {
+            $selectedPeriod = 'monthly';
+        }
+
+        return view('auth.register', compact('plans', 'selectedPlan', 'selectedPeriod'));
     }
 
-    public function showForm()
+    public function store(Request $request, StripeCheckoutService $stripeCheckoutService): RedirectResponse
     {
-        $plans = config('plans', []);
-
-        return view('auth.register', compact('plans'));
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $plans = config('plans', []);
-        $planKeys = array_keys($plans);
+        $publicPlanKeys = $this->publicPlanKeys();
 
         $data = $request->validate([
             'company_name' => ['required', 'string', 'max:180'],
             'admin_name' => ['required', 'string', 'max:180'],
             'email' => ['required', 'email', 'max:180'],
             'password' => ['required', 'string', 'min:8', 'max:100', 'confirmed'],
-            'plan' => ['required', Rule::in($planKeys)],
+            'plan' => ['required', Rule::in($publicPlanKeys)],
+            'billing_period' => ['required', Rule::in(['monthly', 'semiannual', 'annual'])],
             'phone' => ['nullable', 'string', 'max:30'],
             'terms' => ['accepted'],
         ]);
@@ -54,7 +118,7 @@ class CompanyRegistrationController extends Controller
                 'name' => $data['company_name'],
                 'owner_name' => $data['admin_name'],
                 'owner_email' => $data['email'],
-                'owner_phone' => $data['phone'] ?? null,
+                'owner_phone' => $data['phone'] ?? '',
                 'billing_email' => $data['email'],
                 'status' => 'pending_payment',
             ]);
@@ -63,7 +127,7 @@ class CompanyRegistrationController extends Controller
                 'name' => $data['company_name'],
                 'owner_name' => $data['admin_name'],
                 'owner_email' => $data['email'],
-                'owner_phone' => $data['phone'] ?? $company->owner_phone,
+                'owner_phone' => $data['phone'] ?? $company->owner_phone ?? '',
                 'billing_email' => $data['email'],
                 'status' => 'pending_payment',
             ]);
@@ -93,10 +157,10 @@ class CompanyRegistrationController extends Controller
         }
 
         $plan = (string) $data['plan'];
-        $billingPeriod = 'monthly';
+        $billingPeriod = (string) $data['billing_period'];
 
         if (! $company->stripe_id) {
-            $company->stripe_id = $this->stripeCheckoutService->createCustomer(
+            $company->stripe_id = $stripeCheckoutService->createCustomer(
                 $company->name,
                 $data['email'],
                 $data['phone'] ?? null
@@ -123,7 +187,7 @@ class CompanyRegistrationController extends Controller
             'admin_email' => $admin->email,
         ];
 
-        $session = $this->stripeCheckoutService->createCheckoutSession([
+        $session = $stripeCheckoutService->createCheckoutSession([
             'mode' => 'subscription',
             'line_items' => [[
                 'price' => $priceId,
@@ -145,6 +209,15 @@ class CompanyRegistrationController extends Controller
         ]);
 
         return redirect()->away($session['url']);
+    }
+
+    private function publicPlanKeys(): array
+    {
+        return app(PlanCatalogService::class)
+            ->publicPlans()
+            ->pluck('name')
+            ->map(fn ($name) => (string) $name)
+            ->toArray();
     }
 
     public function success(Request $request)
@@ -177,7 +250,7 @@ class CompanyRegistrationController extends Controller
         ]);
     }
 
-    public function retryCheckout(Request $request): RedirectResponse
+    public function retryCheckout(Request $request, StripeCheckoutService $stripeCheckoutService): RedirectResponse
     {
         $company = $request->user()?->company;
         if (! $company) {
@@ -193,7 +266,7 @@ class CompanyRegistrationController extends Controller
         }
 
         if (! $company->stripe_id) {
-            $company->stripe_id = $this->stripeCheckoutService->createCustomer(
+            $company->stripe_id = $stripeCheckoutService->createCustomer(
                 $company->name,
                 $company->owner_email,
                 $company->owner_phone
@@ -213,7 +286,7 @@ class CompanyRegistrationController extends Controller
             'admin_email' => $company->owner_email,
         ];
 
-        $session = $this->stripeCheckoutService->createCheckoutSession([
+        $session = $stripeCheckoutService->createCheckoutSession([
             'mode' => 'subscription',
             'line_items' => [[
                 'price' => $priceId,

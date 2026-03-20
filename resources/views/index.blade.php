@@ -36,12 +36,12 @@
 <section class="container pb-4">
     <div class="card card-ui">
         <div class="card-body p-4 p-lg-5">
-            <h2 class="h4 fw-bold mb-3">Cómo funciona</h2>
+            <h2 class="h4 fw-bold mb-3">Cómo funciona ElectroFix-AI</h2>
             <div class="row g-3">
-                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>1.</strong> Elige tu plan.</div></div>
-                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>2.</strong> Te enviamos a Stripe Checkout.</div></div>
-                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>3.</strong> Stripe confirma el pago.</div></div>
-                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>4.</strong> Creamos tu cuenta automáticamente.</div></div>
+                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>1.</strong> Registra tu taller y configura tu equipo.</div></div>
+                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>2.</strong> Centraliza órdenes, clientes y equipos en un solo panel.</div></div>
+                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>3.</strong> Controla inventario, diagnósticos y costos en tiempo real.</div></div>
+                <div class="col-md-3"><div class="p-3 border rounded-4 h-100"><strong>4.</strong> Entrega trabajos con tickets internos y seguimiento al cliente.</div></div>
             </div>
         </div>
     </div>
@@ -69,48 +69,54 @@
         </div>
     </div>
 
-    <div class="row g-3">
-        @foreach($plans as $planKey => $plan)
-            @php
-                $prices = $plan['prices'] ?? [];
-                $monthly = data_get($prices, 'monthly.amount');
-                $semiannual = data_get($prices, 'semiannual.amount');
-                $annual = data_get($prices, 'annual.amount');
-            @endphp
-            <div class="col-lg-4">
-                <div class="card card-ui h-100 plan-card" data-plan-card
-                    data-price-monthly="{{ $monthly ?? '' }}"
-                    data-price-semiannual="{{ $semiannual ?? '' }}"
-                    data-price-annual="{{ $annual ?? '' }}">
-                    <div class="card-body d-flex flex-column">
-                        <h3 class="h5 fw-bold mb-1">{{ $plan['label'] ?? ucfirst($planKey) }}</h3>
-                        <p class="text-muted small mb-3">Suscripción en Stripe para empezar a operar tu taller.</p>
+    @if(count($plans) === 0)
+        <p class="text-muted text-center py-4">
+            Planes no disponibles en este momento. Contáctanos para más información.
+        </p>
+    @else
+        <div class="row g-3">
+            @foreach($plans as $planKey => $plan)
+                @php
+                    $prices = $plan['prices'] ?? [];
+                    $monthly = data_get($prices, 'monthly.amount');
+                    $semiannual = data_get($prices, 'semiannual.amount');
+                    $annual = data_get($prices, 'annual.amount');
+                @endphp
+                <div class="col-lg-4">
+                    <div class="card card-ui h-100 plan-card" data-plan-card
+                        data-price-monthly="{{ $monthly ?? '' }}"
+                        data-price-semiannual="{{ $semiannual ?? '' }}"
+                        data-price-annual="{{ $annual ?? '' }}">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h5 fw-bold mb-1">{{ $plan['label'] ?? ucfirst($planKey) }}</h3>
+                            <p class="text-muted small mb-3">Suscripción en Stripe para empezar a operar tu taller.</p>
 
-                        <div class="plan-price mb-3">
-                            <span class="plan-price-strike d-none" data-plan-strike></span>
-                            <div class="plan-price-main">
-                                <div class="plan-price-current" data-plan-current></div>
-                                <div class="plan-price-period" data-plan-period-label>MXN / mes</div>
+                            <div class="plan-price mb-3">
+                                <span class="plan-price-strike d-none" data-plan-strike></span>
+                                <div class="plan-price-main">
+                                    <div class="plan-price-current" data-plan-current></div>
+                                    <div class="plan-price-period" data-plan-period-label>MXN / mes</div>
+                                </div>
                             </div>
-                        </div>
 
-                        <ul class="text-muted small mb-4">
-                            @foreach(($plan['features'] ?? []) as $feature)
-                                <li>{{ $feature }}</li>
-                            @endforeach
-                        </ul>
+                            <ul class="text-muted small mb-4">
+                                @foreach(($plan['features'] ?? []) as $feature)
+                                    <li>{{ $feature }}</li>
+                                @endforeach
+                            </ul>
 
-                        <div class="mt-auto d-grid gap-2">
-                            <input type="hidden" value="monthly" data-billing-period>
-                            <a class="btn btn-ui btn-primary-ui" data-register-link data-plan="{{ $planKey }}" href="{{ route('register') }}">
-                                Crear cuenta
-                            </a>
+                            <div class="mt-auto d-grid gap-2">
+                                <input type="hidden" value="monthly" data-billing-period>
+                                <a class="btn btn-ui btn-primary-ui" data-register-link data-plan="{{ $planKey }}" href="{{ route('register') }}">
+                                    Crear cuenta
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        @endforeach
-    </div>
+            @endforeach
+        </div>
+    @endif
 </section>
 
 <section class="container pb-5">
