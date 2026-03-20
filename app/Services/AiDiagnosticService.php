@@ -2,204 +2,174 @@
 
 namespace App\Services;
 
-use App\Application\AI\Contracts\AiProviderInterface;
-use App\Application\AI\DTO\AiResponse;
+use App\Contracts\AiDiagnosticProvider;
+use App\DTOs\AiDiagnosticResult;
+use App\Models\Company;
+use App\Models\Order;
+use App\Models\User;
+use App\Services\Ai\ArisProvider;
+use App\Services\Ai\LocalFallbackProvider;
+use App\Services\Exceptions\AiProviderException;
+use App\Services\Exceptions\AiQuotaExceededException;
+use App\Services\Exceptions\AiUsageException;
+use App\Services\Exceptions\ArisNotAvailableException;
 use Illuminate\Support\Facades\Log;
 
 class AiDiagnosticService
 {
-    public function __construct(private readonly AiProviderInterface $provider)
-    {
+    private const DEFAULT_PLAN = 'starter';
+
+    public function __construct(
+        private readonly AiDiagnosticProvider $provider,
+        private readonly LocalFallbackProvider $localFallbackProvider,
+        private readonly ArisProvider $arisProvider,
+        private readonly AiUsageService $aiUsageService,
+        private readonly AiTokenEstimator $tokenEstimator,
+        private readonly OrderDiagnosticService $orderDiagnosticService
+    ) {
     }
 
-    public function analyze(string $type, string $brand, ?string $model, string $symptoms, array $meta = []): array
+    public function diagnose(Order $order, Company $company, User $actor, string $symptoms): AiDiagnosticResult
     {
-        $startedAt = microtime(true);
-        $providerResponse = $this->provider->generateSolution([
-            'type' => $type,
-            'brand' => $brand,
-            'model' => $model,
-            'symptoms' => $symptoms,
-            'language' => 'es-MX',
-        ]);
+        if ($order->ai_diagnosed_at) {
+            throw new AiQuotaExceededException('already_diagnosed', 'Esta orden ya cuenta con un diagnóstico IA.');
+        }
 
-        $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
+        $symptoms = trim($symptoms);
+        if (mb_strlen($symptoms) > 600) {
+            throw new AiQuotaExceededException('invalid_symptoms', 'Los síntomas no pueden exceder 600 caracteres.');
+        }
 
-        if ($providerResponse->success) {
-            $normalized = $this->normalizeProviderContent(
-                $providerResponse,
-                $type,
-                $brand,
-                $model,
-                $symptoms
+        $order->loadMissing('equipment');
+        $company->loadMissing('subscription.planModel');
+
+        $plan = (string) ($company->subscription?->plan ?? self::DEFAULT_PLAN);
+        $deviceInfo = $this->deviceInfo($order);
+        $prompt = sprintf('Equipo: %s. Síntomas: %s', $deviceInfo, $symptoms);
+        $promptChars = mb_strlen($prompt);
+        $promptTokens = $this->tokenEstimator->estimateFromChars($promptChars);
+
+        try {
+            $this->aiUsageService->validateBeforeUsage($company, $plan, $promptTokens);
+        } catch (AiUsageException $exception) {
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                $exception->status(),
+                $exception->getMessage(),
+                $promptChars
             );
 
-            Log::channel('ai')->info('AI diagnostic generated', [
-                'company_id' => $meta['company_id'] ?? null,
-                'order_id' => $meta['order_id'] ?? null,
-                'provider' => $this->provider->getProviderName(),
-                'success' => true,
-                'elapsed_ms' => $elapsedMs,
-                'tokens_used' => $providerResponse->tokensUsed,
+            throw new AiQuotaExceededException($exception->status(), $exception->getMessage());
+        }
+
+        $provider = $this->resolveProvider($company);
+
+        try {
+            $result = $provider->diagnose($symptoms, $deviceInfo);
+        } catch (ArisNotAvailableException $exception) {
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                'blocked_plan',
+                $exception->getMessage(),
+                $promptChars
+            );
+
+            throw new AiQuotaExceededException('blocked_plan', $exception->getMessage());
+        } catch (AiProviderException $exception) {
+            Log::channel('ai')->warning('AI provider failed, using local fallback', [
+                'company_id' => $company->id,
+                'order_id' => $order->id,
+                'status' => $exception->status(),
+                'message' => $exception->getMessage(),
             ]);
 
-            return $normalized;
+            $result = $this->localFallbackProvider->diagnose($symptoms, $deviceInfo);
+        } catch (\Throwable $exception) {
+            Log::channel('ai')->error('Unexpected AI provider failure, using local fallback', [
+                'company_id' => $company->id,
+                'order_id' => $order->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $result = $this->localFallbackProvider->diagnose($symptoms, $deviceInfo);
         }
 
-        Log::channel('ai')->warning('AI diagnostic provider fallback', [
-            'company_id' => $meta['company_id'] ?? null,
-            'order_id' => $meta['order_id'] ?? null,
-            'provider' => $this->provider->getProviderName(),
-            'success' => false,
-            'elapsed_ms' => $elapsedMs,
-            'error_code' => $providerResponse->errorCode,
-            'error_message' => $providerResponse->errorMessage,
+        $analysis = $result->payload;
+        $responseChars = mb_strlen((string) json_encode($analysis, JSON_UNESCAPED_UNICODE));
+        $responseTokens = $this->tokenEstimator->estimateFromChars($responseChars);
+        $totalTokens = $promptTokens + $responseTokens;
+
+        try {
+            $this->aiUsageService->commitSuccessfulUsage(
+                $company,
+                $order,
+                $plan,
+                $promptChars,
+                $responseChars,
+                $totalTokens
+            );
+        } catch (AiUsageException $exception) {
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                $exception->status(),
+                $exception->getMessage(),
+                $promptChars,
+                $responseChars
+            );
+
+            throw new AiQuotaExceededException($exception->status(), $exception->getMessage());
+        }
+
+        $this->orderDiagnosticService->createFromAi(
+            $order->loadMissing('equipment'),
+            $actor,
+            $analysis,
+            $promptTokens,
+            $responseTokens,
+            $symptoms
+        );
+
+        $order->update([
+            'symptoms' => $symptoms,
+            'ai_potential_causes' => $analysis['possible_causes'] ?? [],
+            'ai_estimated_time' => $analysis['estimated_time'] ?? null,
+            'ai_suggested_parts' => $analysis['suggested_parts'] ?? [],
+            'ai_technical_advice' => $analysis['technical_advice'] ?? null,
+            'ai_diagnosed_at' => now(),
+            'ai_tokens_used' => $totalTokens,
+            'ai_provider' => $analysis['provider'] ?? $result->provider,
+            'ai_model' => $analysis['model'] ?? null,
+            'ai_requires_parts_replacement' => (bool) ($analysis['requires_parts_replacement'] ?? false),
+            'ai_cost_repair_labor' => (float) ($analysis['cost_suggestion']['repair_labor_cost'] ?? 0),
+            'ai_cost_replacement_parts' => (float) ($analysis['cost_suggestion']['replacement_parts_cost'] ?? 0),
+            'ai_cost_replacement_total' => (float) ($analysis['cost_suggestion']['replacement_total_cost'] ?? 0),
         ]);
 
-        $fallback = $this->fallbackHeuristic($type, $brand, $model, $symptoms);
-        $fallback['success'] = true;
-        $fallback['error_code'] = $providerResponse->errorCode ?? 'provider_error';
-        $fallback['error_message'] = $providerResponse->errorMessage ?? 'No fue posible consultar el proveedor IA externo.';
-        $fallback['provider'] = $this->provider->getProviderName().'_fallback';
-
-        return $fallback;
+        return $result;
     }
 
-    private function normalizeProviderContent(
-        AiResponse $providerResponse,
-        string $type,
-        string $brand,
-        ?string $model,
-        string $symptoms
-    ): array {
-        $base = $this->fallbackHeuristic($type, $brand, $model, $symptoms);
-        $content = $providerResponse->content;
-        $costSuggestion = is_array($content['cost_suggestion'] ?? null) ? $content['cost_suggestion'] : [];
-
-        $requiresParts = (bool) ($content['requires_parts_replacement'] ?? false);
-        $labor = (float) ($costSuggestion['repair_labor_cost'] ?? $base['cost_suggestion']['repair_labor_cost']);
-        $parts = $requiresParts
-            ? (float) ($costSuggestion['replacement_parts_cost'] ?? 0)
-            : 0.0;
-        $replacementTotal = $requiresParts
-            ? (float) ($costSuggestion['replacement_total_cost'] ?? ($labor + $parts))
-            : 0.0;
-
-        return [
-            'equipment' => trim($brand.' '.$type.' '.($model ?? '')),
-            'diagnostic_summary' => (string) ($content['diagnostic_summary'] ?? $base['diagnostic_summary']),
-            'potential_causes' => $this->normalizeStringArray($content['possible_causes'] ?? $base['possible_causes']),
-            'possible_causes' => $this->normalizeStringArray($content['possible_causes'] ?? $base['possible_causes']),
-            'recommended_actions' => $this->normalizeStringArray($content['recommended_actions'] ?? $base['recommended_actions']),
-            'estimated_time' => (string) ($content['estimated_time'] ?? $base['estimated_time']),
-            'suggested_parts' => $this->normalizeStringArray($content['suggested_parts'] ?? $base['suggested_parts']),
-            'technical_advice' => (string) ($content['technical_advice'] ?? $base['technical_advice']),
-            'requires_parts_replacement' => $requiresParts,
-            'confidence_score' => (float) ($content['confidence_score'] ?? $base['confidence_score']),
-            'provider' => $this->provider->getProviderName(),
-            'model' => (string) config('services.gemini.model', 'gemini-1.5-flash'),
-            'success' => true,
-            'error_code' => null,
-            'error_message' => null,
-            'tokens_used' => $providerResponse->tokensUsed,
-            'cost_suggestion' => [
-                'repair_labor_cost' => round($labor, 2),
-                'replacement_parts_cost' => round($parts, 2),
-                'replacement_total_cost' => round($replacementTotal, 2),
-            ],
-        ];
-    }
-
-    private function normalizeStringArray(mixed $value): array
+    private function resolveProvider(Company $company): AiDiagnosticProvider
     {
-        if (! is_array($value)) {
-            return [];
+        $override = $company->subscription?->planModel?->ai_provider_override;
+        if ($override === 'aris') {
+            return $this->arisProvider;
         }
 
-        $normalized = array_values(array_filter(array_map(
-            static fn ($item): string => trim((string) $item),
-            $value
-        ), static fn (string $item): bool => $item !== ''));
-
-        return array_values(array_unique($normalized));
+        return $this->provider;
     }
 
-    private function fallbackHeuristic(string $type, string $brand, ?string $model, string $symptoms): array
+    private function deviceInfo(Order $order): string
     {
-        $text = mb_strtolower($symptoms);
+        $type = (string) ($order->equipment?->type ?? '');
+        $brand = (string) ($order->equipment?->brand ?? '');
+        $model = (string) ($order->equipment?->model ?? '');
 
-        $causes = [];
-        $parts = [];
-        $time = '2-4 horas';
-        $advice = 'Realiza primero una inspección eléctrica básica y confirma continuidad de componentes críticos.';
-        $repairLaborCost = 500.00;
-
-        if (str_contains($text, 'no enciende') || str_contains($text, 'enciende')) {
-            $causes[] = 'Falla en fuente de alimentación o tarjeta principal.';
-            $parts[] = 'Tarjeta electrónica';
-            $parts[] = 'Fusible térmico';
-            $time = '3-5 horas';
-            $advice = 'Verifica voltajes de entrada/salida antes de reemplazar módulos.';
-            $repairLaborCost = 850.00;
-        }
-
-        if (str_contains($text, 'ruido') || str_contains($text, 'vibr')) {
-            $causes[] = 'Desgaste de rodamientos o desbalance mecánico.';
-            $parts[] = 'Rodamientos';
-            $parts[] = 'Soportes antivibración';
-            $time = '2-3 horas';
-            $repairLaborCost = max($repairLaborCost, 700.00);
-        }
-
-        if (str_contains($text, 'fuga') || str_contains($text, 'agua')) {
-            $causes[] = 'Deterioro en sellos o mangueras.';
-            $parts[] = 'Kit de sellos';
-            $parts[] = 'Manguera de drenaje';
-            $time = '1-2 horas';
-            $repairLaborCost = max($repairLaborCost, 600.00);
-        }
-
-        if (empty($causes)) {
-            $causes[] = 'Posible combinación de fallo electrónico y desgaste por uso.';
-            $advice = 'Se recomienda mantenimiento preventivo, limpieza técnica y recalibración antes de cambiar piezas.';
-            $repairLaborCost = 450.00;
-        }
-
-        $parts = array_values(array_unique($parts));
-        $requiresPartsReplacement = ! empty($parts);
-        $replacementPartsCost = $requiresPartsReplacement ? count($parts) * 320.00 : 0.00;
-        $replacementTotalCost = $requiresPartsReplacement
-            ? round($replacementPartsCost + $repairLaborCost, 2)
-            : 0.00;
-
-        return [
-            'equipment' => trim($brand.' '.$type.' '.($model ?? '')),
-            'diagnostic_summary' => $requiresPartsReplacement
-                ? 'Se detecta escenario de reparación con posible reemplazo de componentes.'
-                : 'Se detecta escenario de reparación sin necesidad inicial de reemplazo de piezas.',
-            'potential_causes' => array_values(array_unique($causes)),
-            'possible_causes' => array_values(array_unique($causes)),
-            'recommended_actions' => [
-                'Inspección eléctrica inicial',
-                $requiresPartsReplacement ? 'Validar estado de piezas críticas para reemplazo' : 'Ajuste y calibración de componentes actuales',
-                'Prueba funcional completa antes de entrega',
-            ],
-            'estimated_time' => $time,
-            'suggested_parts' => $parts,
-            'technical_advice' => $advice,
-            'requires_parts_replacement' => $requiresPartsReplacement,
-            'confidence_score' => $requiresPartsReplacement ? 82.5 : 74.0,
-            'provider' => 'local_stub',
-            'model' => 'heuristic-v2',
-            'success' => true,
-            'error_code' => null,
-            'error_message' => null,
-            'tokens_used' => null,
-            'cost_suggestion' => [
-                'repair_labor_cost' => round($repairLaborCost, 2),
-                'replacement_parts_cost' => round($replacementPartsCost, 2),
-                'replacement_total_cost' => $replacementTotalCost,
-            ],
-        ];
+        return trim(sprintf('%s %s %s', $brand, $type, $model));
     }
 }

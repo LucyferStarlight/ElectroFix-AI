@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Equipment;
+use App\Models\TechnicianProfile;
+use App\Models\Subscription;
 use App\Models\User;
+use App\Support\TechnicianStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,7 +19,9 @@ class OperationalModulesTest extends TestCase
     public function test_worker_can_create_customer_and_equipment_and_order(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
+        $this->createAssignableTechnicianProfile($company, $worker, 'Operador QA');
 
         $this->actingAs($worker)
             ->post(route('worker.customers.store'), [
@@ -62,6 +67,8 @@ class OperationalModulesTest extends TestCase
     {
         $companyA = Company::factory()->create();
         $companyB = Company::factory()->create();
+        $this->createActiveSubscription($companyA);
+        $this->createActiveSubscription($companyB);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $companyA->id]);
         $foreignCustomer = Customer::factory()->create(['company_id' => $companyB->id]);
 
@@ -77,8 +84,10 @@ class OperationalModulesTest extends TestCase
     public function test_admin_assigns_worker_as_technician_when_creating_order(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id]);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id, 'name' => 'Worker Técnico']);
+        $technicianProfile = $this->createAssignableTechnicianProfile($company, $worker, 'Worker Técnico');
         $customer = Customer::factory()->create(['company_id' => $company->id]);
         $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
 
@@ -86,7 +95,7 @@ class OperationalModulesTest extends TestCase
             ->post(route('worker.orders.store'), [
                 'customer_id' => $customer->id,
                 'equipment_id' => $equipment->id,
-                'technician_user_id' => $worker->id,
+                'technician_profile_id' => $technicianProfile->id,
                 'symptoms' => 'No arranca',
             ])
             ->assertSessionHasNoErrors();
@@ -102,7 +111,9 @@ class OperationalModulesTest extends TestCase
     public function test_admin_can_assign_himself_as_technician_when_creating_order(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id, 'name' => 'Admin Técnico']);
+        $technicianProfile = $this->createAssignableTechnicianProfile($company, $admin, 'Admin Técnico');
         $customer = Customer::factory()->create(['company_id' => $company->id]);
         $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
 
@@ -110,7 +121,7 @@ class OperationalModulesTest extends TestCase
             ->post(route('worker.orders.store'), [
                 'customer_id' => $customer->id,
                 'equipment_id' => $equipment->id,
-                'technician_user_id' => $admin->id,
+                'technician_profile_id' => $technicianProfile->id,
                 'symptoms' => 'No enfría',
             ])
             ->assertSessionHasNoErrors();
@@ -126,6 +137,7 @@ class OperationalModulesTest extends TestCase
     public function test_order_diagnose_endpoint_is_disabled_for_direct_consumption(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
         $customer = Customer::factory()->create(['company_id' => $company->id]);
         $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
@@ -139,5 +151,28 @@ class OperationalModulesTest extends TestCase
             ->assertJson([
                 'message' => 'La consulta directa está deshabilitada. Activa "Solicitar diagnóstico IA" y guarda la orden.',
             ]);
+    }
+
+    private function createActiveSubscription(Company $company): Subscription
+    {
+        return Subscription::factory()->create([
+            'company_id' => $company->id,
+            'status' => Subscription::STATUS_ACTIVE,
+        ]);
+    }
+
+    private function createAssignableTechnicianProfile(Company $company, User $user, string $displayName): TechnicianProfile
+    {
+        return TechnicianProfile::query()->create([
+            'company_id' => $company->id,
+            'user_id' => $user->id,
+            'employee_code' => strtoupper($user->id.'-QA'),
+            'display_name' => $displayName,
+            'specialties' => ['General'],
+            'status' => TechnicianStatus::AVAILABLE,
+            'max_concurrent_orders' => 3,
+            'hourly_cost' => 100,
+            'is_assignable' => true,
+        ]);
     }
 }

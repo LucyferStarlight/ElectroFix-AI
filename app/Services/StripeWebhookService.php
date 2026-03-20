@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class StripeWebhookService
 {
+    // Cashier gestiona el modelo de suscripciones; este servicio procesa eventos del webhook de Stripe.
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
         private readonly StripeSignupService $stripeSignupService
@@ -40,7 +41,8 @@ class StripeWebhookService
             return;
         }
 
-        if ($stored->status === 'processing'
+        if (! $stored->wasRecentlyCreated
+            && $stored->status === 'processing'
             && $stored->updated_at !== null
             && $stored->updated_at->gt(now()->subMinutes(5))) {
             return;

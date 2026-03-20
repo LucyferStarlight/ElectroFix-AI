@@ -4,6 +4,8 @@ namespace Tests\Unit;
 
 use App\Models\AiUsage;
 use App\Models\Company;
+use App\Models\Plan;
+use App\Models\Subscription;
 use App\Services\AiOverageMeteringService;
 use App\Services\AiQuotaGuardService;
 use App\Services\AiTokenEstimator;
@@ -22,6 +24,7 @@ class AiUsageServiceTest extends TestCase
     {
         $service = $this->makeService();
         $company = Company::factory()->create();
+        $this->attachSubscription($company);
 
         $this->expectException(AiUsageException::class);
         $this->expectExceptionMessage('Tu plan actual no incluye Asistente IA.');
@@ -33,10 +36,17 @@ class AiUsageServiceTest extends TestCase
     {
         $service = $this->makeService();
         $company = Company::factory()->create();
+        $this->attachSubscription($company);
+        $this->ensurePlan('pro', [
+            'ai_enabled' => true,
+            'max_ai_requests' => 100,
+            'max_ai_tokens' => 60000,
+            'overage_enabled' => false,
+        ]);
 
         AiUsage::query()->create([
             'company_id' => $company->id,
-            'ai_requests_used' => 80,
+            'ai_requests_used' => 100,
             'ai_tokens_used' => 1200,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
@@ -54,11 +64,18 @@ class AiUsageServiceTest extends TestCase
     {
         $service = $this->makeService();
         $company = Company::factory()->create();
+        $this->attachSubscription($company);
+        $this->ensurePlan('pro', [
+            'ai_enabled' => true,
+            'max_ai_requests' => 100,
+            'max_ai_tokens' => 60000,
+            'overage_enabled' => false,
+        ]);
 
         AiUsage::query()->create([
             'company_id' => $company->id,
             'ai_requests_used' => 8,
-            'ai_tokens_used' => 49990,
+            'ai_tokens_used' => 59990,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
             'overage_requests' => 0,
@@ -84,5 +101,31 @@ class AiUsageServiceTest extends TestCase
             $quotaGuard
         );
     }
-}
 
+    private function ensurePlan(string $name, array $overrides): void
+    {
+        Plan::query()->updateOrCreate(
+            ['name' => $name],
+            array_merge([
+                'is_public' => true,
+                'ai_enabled' => false,
+                'max_ai_requests' => 0,
+                'max_ai_tokens' => 0,
+                'overage_enabled' => false,
+                'overage_price_per_request' => 0,
+                'overage_price_per_1000_tokens' => 0,
+            ], $overrides)
+        );
+    }
+
+    private function attachSubscription(Company $company): void
+    {
+        Subscription::factory()->create([
+            'company_id' => $company->id,
+            'plan' => 'pro',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth(),
+            'ends_at' => now()->endOfMonth(),
+        ]);
+    }
+}

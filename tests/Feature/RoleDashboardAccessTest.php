@@ -26,6 +26,7 @@ class RoleDashboardAccessTest extends TestCase
     public function test_dashboard_redirects_per_role(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
 
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
         $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id]);
@@ -39,6 +40,7 @@ class RoleDashboardAccessTest extends TestCase
     public function test_worker_cannot_access_admin_routes(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
 
         $this->actingAs($worker)
@@ -50,6 +52,8 @@ class RoleDashboardAccessTest extends TestCase
     {
         $companyA = Company::factory()->create();
         $companyB = Company::factory()->create();
+        $this->createActiveSubscription($companyA);
+        $this->createActiveSubscription($companyB);
 
         $admin = User::factory()->create(['role' => 'admin', 'company_id' => $companyA->id]);
         $foreignWorker = User::factory()->create(['role' => 'worker', 'company_id' => $companyB->id]);
@@ -65,9 +69,8 @@ class RoleDashboardAccessTest extends TestCase
     public function test_admin_can_update_own_subscription(): void
     {
         $company = Company::factory()->create();
+        $subscription = $this->createActiveSubscription($company);
         $admin = User::factory()->create(['role' => 'admin', 'company_id' => $company->id]);
-
-        $subscription = Subscription::factory()->create(['company_id' => $company->id]);
 
         $this->actingAs($admin)
             ->put(route('admin.subscription.update'), [
@@ -109,6 +112,7 @@ class RoleDashboardAccessTest extends TestCase
     public function test_worker_special_modules_require_delegated_permissions(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $worker = User::factory()->create([
             'role' => 'worker',
             'company_id' => $company->id,
@@ -131,6 +135,7 @@ class RoleDashboardAccessTest extends TestCase
     public function test_worker_dashboard_shows_only_delegated_orders_to_worker(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id, 'name' => 'Worker Uno']);
         $customer = Customer::factory()->create(['company_id' => $company->id]);
         $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
@@ -154,5 +159,20 @@ class RoleDashboardAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Órdenes delegadas')
             ->assertDontSee('No tienes órdenes delegadas actualmente.');
+    }
+
+    private function createActiveSubscription(Company $company): Subscription
+    {
+        return Subscription::query()->firstOrCreate(
+            ['company_id' => $company->id],
+            [
+                'plan' => 'starter',
+                'status' => Subscription::STATUS_ACTIVE,
+                'starts_at' => now()->startOfMonth(),
+                'ends_at' => now()->startOfMonth()->addMonth()->endOfMonth(),
+                'billing_cycle' => 'monthly',
+                'user_limit' => 10,
+            ]
+        );
     }
 }

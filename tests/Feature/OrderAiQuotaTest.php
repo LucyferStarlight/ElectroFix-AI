@@ -24,8 +24,8 @@ class OrderAiQuotaTest extends TestCase
     {
         $company = Company::factory()->create();
 
-        Plan::query()->create([
-            'name' => 'ai_limited',
+        Plan::query()->updateOrCreate(['name' => 'pro'], [
+            'name' => 'pro',
             'is_public' => false,
             'ai_enabled' => true,
             'max_ai_requests' => 1,
@@ -37,7 +37,7 @@ class OrderAiQuotaTest extends TestCase
 
         Subscription::factory()->create([
             'company_id' => $company->id,
-            'plan' => 'ai_limited',
+            'plan' => 'pro',
             'status' => 'active',
             'starts_at' => now()->startOfMonth(),
             'ends_at' => now()->endOfMonth(),

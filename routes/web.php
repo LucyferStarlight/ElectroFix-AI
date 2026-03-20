@@ -98,6 +98,7 @@ Route::middleware(['auth', 'must_change_password', 'subscription_active'])->grou
         Route::put('/admin/technicians/{technician}', [TechnicianController::class, 'update'])->name('admin.technicians.update');
         Route::patch('/admin/technicians/{technician}/deactivate', [TechnicianController::class, 'deactivate'])->name('admin.technicians.deactivate');
         Route::get('/admin/subscription', [SubscriptionController::class, 'edit'])->name('admin.subscription.edit');
+        Route::put('/admin/subscription', [SubscriptionController::class, 'update'])->name('admin.subscription.update');
         Route::post('/billing/checkout', [StripeBillingController::class, 'checkout'])->name('billing.checkout');
         Route::get('/billing/success', [StripeBillingController::class, 'success'])->name('billing.success');
         Route::get('/billing/cancel', [StripeBillingController::class, 'cancel'])->name('billing.cancel');

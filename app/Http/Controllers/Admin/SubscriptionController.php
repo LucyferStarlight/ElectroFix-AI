@@ -11,6 +11,7 @@ use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
@@ -80,6 +81,51 @@ class SubscriptionController extends Controller
         }
 
         return back()->with('success', 'Cambio de suscripción aplicado.');
+    }
+
+    public function update(Request $request): RedirectResponse
+    {
+        $this->assertNoCrossCompanyInput($request);
+        $company = $request->user()->company;
+        abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
+
+        $data = $request->validate([
+            'plan' => ['required', 'string', 'max:50'],
+            'status' => ['required', Rule::in([
+                Subscription::STATUS_ACTIVE,
+                Subscription::STATUS_TRIALING,
+                Subscription::STATUS_PAST_DUE,
+                Subscription::STATUS_CANCELED,
+                Subscription::STATUS_INACTIVE,
+            ])],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date'],
+            'billing_cycle' => ['nullable', 'string', 'max:20'],
+            'user_limit' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $subscription = Subscription::query()->firstOrCreate(
+            ['company_id' => $company->id],
+            [
+                'plan' => $data['plan'],
+                'status' => $data['status'],
+                'starts_at' => $data['starts_at'] ?? now()->startOfMonth(),
+                'ends_at' => $data['ends_at'] ?? now()->startOfMonth()->addMonth()->endOfMonth(),
+                'billing_cycle' => $data['billing_cycle'] ?? 'monthly',
+                'user_limit' => $data['user_limit'] ?? 10,
+            ]
+        );
+
+        $subscription->update([
+            'plan' => $data['plan'],
+            'status' => $data['status'],
+            'starts_at' => $data['starts_at'] ?? $subscription->starts_at,
+            'ends_at' => $data['ends_at'] ?? $subscription->ends_at,
+            'billing_cycle' => $data['billing_cycle'] ?? $subscription->billing_cycle,
+            'user_limit' => $data['user_limit'] ?? $subscription->user_limit,
+        ]);
+
+        return back()->with('success', 'Suscripción actualizada.');
     }
 
     public function cancel(Request $request): RedirectResponse

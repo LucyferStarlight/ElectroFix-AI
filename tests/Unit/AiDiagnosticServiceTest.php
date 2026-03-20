@@ -2,83 +2,110 @@
 
 namespace Tests\Unit;
 
-use App\Application\AI\Contracts\AiProviderInterface;
-use App\Application\AI\DTO\AiResponse;
-use App\Application\AI\DTO\UsageEstimate;
+use App\Contracts\AiDiagnosticProvider;
+use App\DTOs\AiDiagnosticResult;
+use App\Models\Company;
+use App\Models\Customer;
+use App\Models\Equipment;
+use App\Models\Order;
+use App\Models\Subscription;
+use App\Models\User;
 use App\Services\AiDiagnosticService;
+use App\Services\Exceptions\AiProviderException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AiDiagnosticServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_it_maps_provider_response_to_domain_shape(): void
     {
-        $provider = new class implements AiProviderInterface
-        {
-            public function generateSolution(array $context): AiResponse
-            {
-                return AiResponse::success([
-                    'diagnostic_summary' => 'Resumen',
-                    'possible_causes' => ['Causa A'],
-                    'recommended_actions' => ['Acción A'],
-                    'estimated_time' => '3 horas',
-                    'suggested_parts' => ['Pieza A'],
-                    'technical_advice' => 'Consejo',
-                    'requires_parts_replacement' => true,
-                    'confidence_score' => 80,
-                    'cost_suggestion' => [
-                        'repair_labor_cost' => 700,
-                        'replacement_parts_cost' => 400,
-                        'replacement_total_cost' => 1100,
-                    ],
-                ], 200);
-            }
+        [$company, $order, $actor] = $this->makeContext();
 
-            public function estimateUsage(string $prompt): UsageEstimate
-            {
-                return new UsageEstimate(10, 20, 30);
-            }
+        $payload = [
+            'diagnostic_summary' => 'Resumen',
+            'possible_causes' => ['Causa A'],
+            'recommended_actions' => ['Acción A'],
+            'estimated_time' => '3 horas',
+            'suggested_parts' => ['Pieza A'],
+            'technical_advice' => 'Consejo',
+            'requires_parts_replacement' => true,
+            'confidence_score' => 80,
+            'cost_suggestion' => [
+                'repair_labor_cost' => 700,
+                'replacement_parts_cost' => 400,
+                'replacement_total_cost' => 1100,
+            ],
+            'provider' => 'gemini',
+            'model' => 'gemini-1.5-flash',
+        ];
 
-            public function getProviderName(): string
-            {
-                return 'gemini';
-            }
-        };
+        $provider = $this->mock(AiDiagnosticProvider::class);
+        $provider->shouldReceive('diagnose')
+            ->once()
+            ->andReturn(new AiDiagnosticResult(
+                diagnosis: 'Resumen',
+                estimatedCost: 1100.0,
+                requiresParts: true,
+                provider: 'gemini',
+                tokensUsed: 200,
+                payload: $payload
+            ));
 
-        $service = new AiDiagnosticService($provider);
-        $analysis = $service->analyze('Lavadora', 'LG', 'X1', 'No enciende');
+        $service = app(AiDiagnosticService::class);
+        $result = $service->diagnose($order, $company, $actor, 'No enciende');
 
-        $this->assertTrue($analysis['success']);
-        $this->assertSame('gemini', $analysis['provider']);
-        $this->assertTrue($analysis['requires_parts_replacement']);
-        $this->assertSame(1100.0, $analysis['cost_suggestion']['replacement_total_cost']);
+        $this->assertSame('gemini', $result->provider);
+        $this->assertTrue($result->requiresParts);
+
+        $order->refresh();
+        $this->assertNotNull($order->ai_diagnosed_at);
+        $this->assertSame('gemini', $order->ai_provider);
+        $this->assertSame('1100.00', (string) $order->ai_cost_replacement_total);
     }
 
     public function test_it_falls_back_when_provider_fails(): void
     {
-        $provider = new class implements AiProviderInterface
-        {
-            public function generateSolution(array $context): AiResponse
-            {
-                return AiResponse::failure('provider_timeout', 'Proveedor no disponible.');
-            }
+        [$company, $order, $actor] = $this->makeContext();
 
-            public function estimateUsage(string $prompt): UsageEstimate
-            {
-                return new UsageEstimate(10, 20, 30);
-            }
+        $provider = $this->mock(AiDiagnosticProvider::class);
+        $provider->shouldReceive('diagnose')
+            ->once()
+            ->andThrow(new AiProviderException('provider_timeout', 'Proveedor no disponible.'));
 
-            public function getProviderName(): string
-            {
-                return 'gemini';
-            }
-        };
+        $service = app(AiDiagnosticService::class);
+        $result = $service->diagnose($order, $company, $actor, 'No calienta');
 
-        $service = new AiDiagnosticService($provider);
-        $analysis = $service->analyze('Horno', 'Whirlpool', 'Z9', 'No calienta');
+        $this->assertSame('local', $result->provider);
+        $this->assertNotSame('', $result->diagnosis);
+        $this->assertSame(0, $result->tokensUsed);
+    }
 
-        $this->assertTrue($analysis['success']);
-        $this->assertSame('provider_timeout', $analysis['error_code']);
-        $this->assertSame('gemini_fallback', $analysis['provider']);
-        $this->assertNotEmpty($analysis['possible_causes']);
+    private function makeContext(): array
+    {
+        $company = Company::factory()->create();
+        Subscription::factory()->create([
+            'company_id' => $company->id,
+            'plan' => 'enterprise',
+            'status' => 'active',
+        ]);
+
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'type' => 'Lavadora',
+            'brand' => 'LG',
+            'model' => 'X1',
+        ]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+        ]);
+        $actor = User::factory()->create(['company_id' => $company->id]);
+
+        return [$company, $order, $actor];
     }
 }

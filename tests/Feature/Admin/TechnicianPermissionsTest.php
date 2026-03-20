@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Company;
+use App\Models\Subscription;
 use App\Models\TechnicianProfile;
 use App\Models\User;
 use App\Support\TechnicianStatus;
@@ -16,6 +17,7 @@ class TechnicianPermissionsTest extends TestCase
     public function test_admin_can_delegate_billing_and_inventory_permissions_when_creating_technician(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $admin = User::factory()->create(['company_id' => $company->id, 'role' => 'admin']);
 
         $this->actingAs($admin)
@@ -42,6 +44,7 @@ class TechnicianPermissionsTest extends TestCase
     public function test_permissions_default_to_false_when_not_sent_in_creation_or_update(): void
     {
         $company = Company::factory()->create();
+        $this->createActiveSubscription($company);
         $admin = User::factory()->create(['company_id' => $company->id, 'role' => 'admin']);
 
         $this->actingAs($admin)
@@ -78,5 +81,13 @@ class TechnicianPermissionsTest extends TestCase
 
         $this->assertFalse($technicianUser->can_access_billing);
         $this->assertFalse($technicianUser->can_access_inventory);
+    }
+
+    private function createActiveSubscription(Company $company): Subscription
+    {
+        return Subscription::factory()->create([
+            'company_id' => $company->id,
+            'status' => Subscription::STATUS_ACTIVE,
+        ]);
     }
 }

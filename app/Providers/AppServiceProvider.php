@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
-use App\Application\AI\Contracts\AiProviderInterface;
-use App\Infrastructure\AI\GeminiProvider;
+use App\Contracts\AiDiagnosticProvider;
+use App\Services\Ai\ArisProvider;
+use App\Services\Ai\GeminiProvider;
+use App\Services\Ai\LocalFallbackProvider;
 use App\Models\Company;
 use App\Models\Order;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -19,7 +21,24 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(AiProviderInterface::class, GeminiProvider::class);
+        $this->app->bind(AiDiagnosticProvider::class, function (): AiDiagnosticProvider {
+            $provider = (string) config('ai.provider', env('AI_PROVIDER', 'gemini'));
+            $apiKey = (string) config('services.gemini.api_key');
+
+            if ($provider === 'aris') {
+                return app(ArisProvider::class);
+            }
+
+            if ($provider === 'local') {
+                return app(LocalFallbackProvider::class);
+            }
+
+            if ($apiKey === '') {
+                return app(LocalFallbackProvider::class);
+            }
+
+            return app(GeminiProvider::class);
+        });
     }
 
     /**

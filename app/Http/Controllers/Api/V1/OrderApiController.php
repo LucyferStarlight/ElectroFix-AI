@@ -11,11 +11,8 @@ use App\Http\Resources\Api\V1\OrderDiagnosticResource;
 use App\Http\Resources\Api\V1\OrderResource;
 use App\Models\Order;
 use App\Services\AiDiagnosticService;
-use App\Services\AiTokenEstimator;
-use App\Services\AiUsageService;
-use App\Services\Exceptions\AiUsageException;
 use App\Services\OrderCreationService;
-use App\Services\OrderDiagnosticService;
+use App\Services\Exceptions\AiQuotaExceededException;
 use Illuminate\Http\Request;
 
 class OrderApiController extends Controller
@@ -25,10 +22,7 @@ class OrderApiController extends Controller
 
     public function __construct(
         private readonly OrderCreationService $orderCreationService,
-        private readonly AiDiagnosticService $aiDiagnosticService,
-        private readonly AiTokenEstimator $aiTokenEstimator,
-        private readonly AiUsageService $aiUsageService,
-        private readonly OrderDiagnosticService $orderDiagnosticService
+        private readonly AiDiagnosticService $aiDiagnosticService
     ) {
     }
 
@@ -84,7 +78,7 @@ class OrderApiController extends Controller
     public function storeDiagnostic(Request $request, Order $order)
     {
         $this->assertCompanyAccess($request, $order->company_id);
-        $order->loadMissing('equipment', 'company.subscription');
+        $order->loadMissing('equipment', 'company.subscription.planModel');
 
         if ($order->ai_diagnosed_at) {
             return response()->json([
@@ -103,30 +97,10 @@ class OrderApiController extends Controller
         ]);
 
         $company = $order->company;
-        $plan = (string) ($company->subscription?->plan ?? 'starter');
         $symptoms = (string) $data['symptoms'];
-        $prompt = sprintf(
-            'Equipo: %s %s %s. Síntomas: %s',
-            $order->equipment?->type,
-            $order->equipment?->brand,
-            $order->equipment?->model ?? '',
-            $symptoms
-        );
-        $promptChars = mb_strlen($prompt);
-        $promptTokens = $this->aiTokenEstimator->estimateFromChars($promptChars);
-
         try {
-            $this->aiUsageService->validateBeforeUsage($company, $plan, $promptTokens);
-        } catch (AiUsageException $exception) {
-            $this->aiUsageService->registerBlocked(
-                $company,
-                $order,
-                $plan,
-                $exception->status(),
-                $exception->getMessage(),
-                $promptChars
-            );
-
+            $this->aiDiagnosticService->diagnose($order, $company, $request->user(), $symptoms);
+        } catch (AiQuotaExceededException $exception) {
             return response()->json([
                 'ok' => false,
                 'data' => null,
@@ -138,96 +112,8 @@ class OrderApiController extends Controller
             ], 422);
         }
 
-        $analysis = $this->aiDiagnosticService->analyze(
-            (string) $order->equipment?->type,
-            (string) $order->equipment?->brand,
-            $order->equipment?->model,
-            $symptoms,
-            ['company_id' => $company->id, 'order_id' => $order->id]
-        );
+        $order->loadMissing('latestDiagnostic');
 
-        if (($analysis['success'] ?? true) === false) {
-            $message = (string) ($analysis['error_message'] ?? 'No fue posible completar el diagnóstico IA en este momento.');
-            $this->aiUsageService->registerBlocked(
-                $company,
-                $order,
-                $plan,
-                'error',
-                $message,
-                $promptChars
-            );
-
-            return response()->json([
-                'ok' => false,
-                'data' => null,
-                'meta' => [],
-                'error' => [
-                    'code' => 'AI_PROVIDER_ERROR',
-                    'message' => $message,
-                ],
-            ], 422);
-        }
-
-        $completionChars = mb_strlen((string) json_encode($analysis, JSON_UNESCAPED_UNICODE));
-        $completionTokens = $this->aiTokenEstimator->estimateFromChars($completionChars);
-        $totalTokens = $promptTokens + $completionTokens;
-
-        try {
-            $this->aiUsageService->commitSuccessfulUsage(
-                $company,
-                $order,
-                $plan,
-                $promptChars,
-                $completionChars,
-                $totalTokens
-            );
-        } catch (AiUsageException $exception) {
-            $this->aiUsageService->registerBlocked(
-                $company,
-                $order,
-                $plan,
-                $exception->status(),
-                $exception->getMessage(),
-                $promptChars,
-                $completionChars
-            );
-
-            return response()->json([
-                'ok' => false,
-                'data' => null,
-                'meta' => [],
-                'error' => [
-                    'code' => strtoupper($exception->status()),
-                    'message' => $exception->getMessage(),
-                ],
-            ], 422);
-        }
-
-        $diagnostic = $this->orderDiagnosticService->createFromAi(
-            $order,
-            $request->user(),
-            $analysis,
-            $promptTokens,
-            $completionTokens,
-            $symptoms
-        );
-
-        $order->update([
-            'symptoms' => $symptoms,
-            'ai_potential_causes' => $analysis['possible_causes'] ?? [],
-            'ai_estimated_time' => $analysis['estimated_time'] ?? null,
-            'ai_suggested_parts' => $analysis['suggested_parts'] ?? [],
-            'ai_technical_advice' => $analysis['technical_advice'] ?? null,
-            'ai_diagnosed_at' => now(),
-            'ai_tokens_used' => $totalTokens,
-            'ai_provider' => $analysis['provider'] ?? 'local_stub',
-            'ai_model' => $analysis['model'] ?? 'heuristic-v2',
-            'ai_requires_parts_replacement' => (bool) ($analysis['requires_parts_replacement'] ?? false),
-            'ai_cost_repair_labor' => (float) ($analysis['cost_suggestion']['repair_labor_cost'] ?? 0),
-            'ai_cost_replacement_parts' => (float) ($analysis['cost_suggestion']['replacement_parts_cost'] ?? 0),
-            'ai_cost_replacement_total' => (float) ($analysis['cost_suggestion']['replacement_total_cost'] ?? 0),
-        ]);
-
-        return $this->successResource(new OrderDiagnosticResource($diagnostic), status: 201);
+        return $this->successResource(new OrderDiagnosticResource($order->latestDiagnostic), status: 201);
     }
 }

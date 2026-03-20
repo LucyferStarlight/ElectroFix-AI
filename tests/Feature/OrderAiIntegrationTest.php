@@ -7,7 +7,9 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\Subscription;
+use App\Models\TechnicianProfile;
 use App\Models\User;
+use App\Support\TechnicianStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -82,7 +84,7 @@ class OrderAiIntegrationTest extends TestCase
         [$worker, $customer, $equipment, $company] = $this->makeContext('pro');
         AiUsage::query()->create([
             'company_id' => $company->id,
-            'ai_requests_used' => 80,
+            'ai_requests_used' => 100,
             'ai_tokens_used' => 500,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
@@ -110,7 +112,7 @@ class OrderAiIntegrationTest extends TestCase
         AiUsage::query()->create([
             'company_id' => $company->id,
             'ai_requests_used' => 10,
-            'ai_tokens_used' => 49990,
+            'ai_tokens_used' => 59990,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
             'overage_requests' => 0,
@@ -122,7 +124,7 @@ class OrderAiIntegrationTest extends TestCase
                 'customer_id' => $customer->id,
                 'equipment_id' => $equipment->id,
                 'technician' => 'Tec IA',
-                'symptoms' => str_repeat('Falla intermitente. ', 40),
+                'symptoms' => str_repeat('Falla intermitente. ', 20),
                 'request_ai_diagnosis' => 1,
             ])
             ->assertSessionHas('warning', 'Se alcanzó el límite mensual de consumo IA para tu empresa.');
@@ -174,6 +176,17 @@ class OrderAiIntegrationTest extends TestCase
             'status' => 'active',
         ]);
         $worker = User::factory()->create(['role' => 'worker', 'company_id' => $company->id]);
+        TechnicianProfile::query()->create([
+            'company_id' => $company->id,
+            'user_id' => $worker->id,
+            'employee_code' => 'EMP-001',
+            'display_name' => $worker->name,
+            'specialties' => ['electrodomesticos'],
+            'status' => TechnicianStatus::AVAILABLE,
+            'max_concurrent_orders' => 5,
+            'hourly_cost' => 0,
+            'is_assignable' => true,
+        ]);
         $customer = Customer::factory()->create(['company_id' => $company->id]);
         $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
 
