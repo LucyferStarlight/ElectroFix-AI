@@ -128,6 +128,58 @@
                         </div>
                     </div>
 
+                    <div id="repairOutcomeSection" class="card card-ui mb-3" style="display:none;">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-3">Cierre de reparación</h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Resultado de la reparación</label>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="repair_outcome" id="repairOutcomeRepaired" value="repaired">
+                                            <label class="form-check-label" for="repairOutcomeRepaired">Reparado completamente</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="repair_outcome" id="repairOutcomePartial" value="partial">
+                                            <label class="form-check-label" for="repairOutcomePartial">Reparación parcial</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="repair_outcome" id="repairOutcomeNotRepaired" value="not_repaired">
+                                            <label class="form-check-label" for="repairOutcomeNotRepaired">No se reparó</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Trabajo realizado</label>
+                                    <textarea
+                                        class="form-control input-ui"
+                                        id="workPerformedInput"
+                                        name="work_performed"
+                                        rows="3"
+                                        maxlength="800"
+                                        placeholder="Describe el trabajo realizado. Ej: limpieza de contactos, reemplazo de condensador C3, ajuste de tensión..."
+                                    ></textarea>
+                                </div>
+                                <div class="col-12" id="outcomeNotesWrap" style="display:none;">
+                                    <label class="form-label">Notas del resultado</label>
+                                    <textarea class="form-control input-ui" id="outcomeNotesInput" name="outcome_notes" rows="3" maxlength="1000"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Monto real cobrado</label>
+                                    <input
+                                        class="form-control input-ui"
+                                        type="number"
+                                        id="actualAmountChargedInput"
+                                        name="actual_amount_charged"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="0.00"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card card-ui mb-3" id="customerServicesCard" style="display:none;">
                         <div class="card-body">
                             <h6 class="fw-bold mb-2">Servicios del cliente seleccionado</h6>
@@ -240,6 +292,12 @@
     const thKind = document.querySelector('.js-th-kind');
     const thService = document.querySelector('.js-th-service');
     const thProduct = document.querySelector('.js-th-product');
+    const repairOutcomeSection = document.getElementById('repairOutcomeSection');
+    const repairOutcomeInputs = document.querySelectorAll('input[name="repair_outcome"]');
+    const workPerformedInput = document.getElementById('workPerformedInput');
+    const outcomeNotesWrap = document.getElementById('outcomeNotesWrap');
+    const outcomeNotesInput = document.getElementById('outcomeNotesInput');
+    const actualAmountChargedInput = document.getElementById('actualAmountChargedInput');
 
     let rowIndex = 0;
     let customerOrders = [];
@@ -335,6 +393,45 @@
         serviceStatusHint.textContent = documentTypeInput.value === 'quote'
             ? 'Servicios ligados actualizarán su estado a “Cotización”.'
             : 'Servicios ligados actualizarán su estado a “Listo”.';
+    };
+
+    const syncRepairOutcomeSection = () => {
+        const source = sourceMode();
+        const applies = source === 'repair' || source === 'mixed';
+        repairOutcomeSection.style.display = applies ? 'block' : 'none';
+
+        repairOutcomeInputs.forEach((input) => {
+            input.required = applies;
+            if (!applies) {
+                input.checked = false;
+            }
+        });
+
+        workPerformedInput.required = applies;
+        actualAmountChargedInput.required = applies;
+
+        if (!applies) {
+            workPerformedInput.value = '';
+            actualAmountChargedInput.value = '';
+            outcomeNotesInput.value = '';
+            outcomeNotesInput.required = false;
+            outcomeNotesWrap.style.display = 'none';
+            return;
+        }
+
+        const selected = document.querySelector('input[name="repair_outcome"]:checked')?.value || '';
+        const showOutcomeNotes = selected === 'partial' || selected === 'not_repaired';
+        outcomeNotesWrap.style.display = showOutcomeNotes ? 'block' : 'none';
+        outcomeNotesInput.required = selected === 'partial';
+
+        if (selected === 'partial') {
+            outcomeNotesInput.placeholder = 'Describe las limitaciones de la reparación y el resultado real. Ej: se eliminó la consecuencia (fusible) pero la causa raíz (rotor dañado) no fue reparada por decisión del cliente.';
+        } else if (selected === 'not_repaired') {
+            outcomeNotesInput.placeholder = 'Describe por qué no se realizó la reparación (ej: cliente no autorizó presupuesto, falla no encontrada...)';
+        } else {
+            outcomeNotesInput.value = '';
+            outcomeNotesInput.placeholder = '';
+        }
     };
 
     const bindRowBehavior = (tr) => {
@@ -469,6 +566,7 @@
     const syncSourceMode = () => {
         syncHeaderBySource();
         syncServicesCardVisibility();
+        syncRepairOutcomeSection();
         if (sourceMode() !== 'sale' && customerMode.value === 'registered') {
             fetchCustomerOrders(customerSelect.value);
         } else {
@@ -510,11 +608,13 @@
 
     customerMode?.addEventListener('change', syncCustomerMode);
     customerSelect?.addEventListener('change', () => fetchCustomerOrders(customerSelect.value));
+    repairOutcomeInputs.forEach((input) => input.addEventListener('change', syncRepairOutcomeSection));
 
     addRow();
     syncStatusHint();
     syncSourceMode();
     syncCustomerMode();
+    syncRepairOutcomeSection();
 })();
 </script>
 @endsection

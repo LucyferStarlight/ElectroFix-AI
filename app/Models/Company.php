@@ -136,4 +136,9 @@ class Company extends Model
     {
         return $this->hasMany(SubscriptionChangeRequest::class);
     }
+
+    public function orderRepairOutcomes(): HasMany
+    {
+        return $this->hasMany(OrderRepairOutcome::class);
+    }
 }

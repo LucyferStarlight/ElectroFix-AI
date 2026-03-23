@@ -98,4 +98,9 @@ class Order extends Model
     {
         return $this->hasMany(EquipmentEvent::class);
     }
+
+    public function repairOutcome(): HasOne
+    {
+        return $this->hasOne(OrderRepairOutcome::class);
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBillingDocumentRequest extends FormRequest
 {
@@ -40,6 +41,8 @@ class StoreBillingDocumentRequest extends FormRequest
 
     public function rules(): array
     {
+        $requiresRepairOutcome = fn (): bool => in_array($this->input('source'), ['repair', 'mixed'], true);
+
         return [
             'document_type' => ['required', 'in:quote,invoice'],
             'source' => ['required', 'in:repair,sale,mixed'],
@@ -55,6 +58,14 @@ class StoreBillingDocumentRequest extends FormRequest
             'items.*.unit_price' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'items.*.inventory_item_id' => ['nullable', 'integer', 'exists:inventory_items,id'],
             'items.*.order_id' => ['nullable', 'integer', 'exists:orders,id'],
+            'repair_outcome' => [
+                Rule::requiredIf($requiresRepairOutcome),
+                'nullable',
+                Rule::in(['repaired', 'partial', 'not_repaired']),
+            ],
+            'outcome_notes' => ['nullable', 'string', 'max:1000', 'required_if:repair_outcome,partial'],
+            'work_performed' => [Rule::requiredIf($requiresRepairOutcome), 'nullable', 'string', 'max:800'],
+            'actual_amount_charged' => [Rule::requiredIf($requiresRepairOutcome), 'nullable', 'numeric', 'min:0', 'max:99999999.99'],
         ];
     }
 }

@@ -31,6 +31,7 @@ class CompanyRegistrationTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'plan' => 'starter',
+            'billing_period' => 'monthly',
             'terms' => 1,
         ]);
 
@@ -55,6 +56,7 @@ class CompanyRegistrationTest extends TestCase
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
                 'plan' => 'starter',
+                'billing_period' => 'monthly',
                 'terms' => 1,
             ]);
 
@@ -75,6 +77,7 @@ class CompanyRegistrationTest extends TestCase
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
                 'plan' => 'starter',
+                'billing_period' => 'monthly',
             ]);
 
         $response->assertRedirect(route('register'));
@@ -93,6 +96,7 @@ class CompanyRegistrationTest extends TestCase
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'plan' => 'starter',
+            'billing_period' => 'monthly',
             'terms' => 1,
         ]);
 

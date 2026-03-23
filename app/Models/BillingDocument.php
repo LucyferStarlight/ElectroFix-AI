@@ -60,6 +60,11 @@ class BillingDocument extends Model
         return $this->hasMany(BillingDocumentItem::class);
     }
 
+    public function repairOutcomes(): HasMany
+    {
+        return $this->hasMany(OrderRepairOutcome::class);
+    }
+
     public function customerDisplayName(): string
     {
         if ($this->customer_mode === 'walk_in') {

@@ -2,7 +2,9 @@
 
 namespace Tests\Unit;
 
-use App\Infrastructure\AI\GeminiProvider;
+use App\Services\Ai\AiDiagnosticFormatter;
+use App\Services\Ai\GeminiProvider;
+use App\Services\Exceptions\AiProviderException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -42,17 +44,12 @@ class GeminiProviderTest extends TestCase
             ], 200),
         ]);
 
-        $provider = new GeminiProvider();
-        $response = $provider->generateSolution([
-            'type' => 'Lavadora',
-            'brand' => 'Marca',
-            'model' => 'M1',
-            'symptoms' => 'No enciende',
-        ]);
+        $provider = new GeminiProvider(new AiDiagnosticFormatter());
+        $response = $provider->diagnose('No enciende', 'Lavadora Marca M1');
 
-        $this->assertTrue($response->success);
+        $this->assertSame('gemini', $response->provider);
         $this->assertSame(123, $response->tokensUsed);
-        $this->assertSame('Diagnóstico preliminar', $response->content['diagnostic_summary']);
+        $this->assertSame('Diagnóstico preliminar', $response->payload['diagnostic_summary']);
     }
 
     public function test_it_returns_failure_for_invalid_payload(): void
@@ -63,16 +60,16 @@ class GeminiProviderTest extends TestCase
             '*' => Http::response(['candidates' => []], 200),
         ]);
 
-        $provider = new GeminiProvider();
-        $response = $provider->generateSolution([
-            'type' => 'Refrigerador',
-            'brand' => 'Marca',
-            'model' => 'R1',
-            'symptoms' => 'No enfría',
-        ]);
+        $provider = new GeminiProvider(new AiDiagnosticFormatter());
 
-        $this->assertFalse($response->success);
-        $this->assertSame('invalid_payload', $response->errorCode);
+        $this->expectException(AiProviderException::class);
+        $this->expectExceptionMessage('No se pudo interpretar la respuesta del servicio IA.');
+
+        try {
+            $provider->diagnose('No enfría', 'Refrigerador Marca R1');
+        } catch (AiProviderException $e) {
+            $this->assertSame('invalid_payload', $e->status());
+            throw $e;
+        }
     }
 }
-

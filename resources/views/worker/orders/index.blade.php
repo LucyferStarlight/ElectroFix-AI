@@ -83,6 +83,20 @@
                                         <h6 class="fw-bold">Tiempos</h6>
                                         <p class="mb-1"><strong>Entrada:</strong> {{ $order->created_at->format('Y-m-d H:i') }}</p>
                                         <p class="mb-0"><strong>Actualizado:</strong> {{ $order->updated_at->format('Y-m-d H:i') }}</p>
+
+                                        <h6 class="fw-bold mt-4">Entrega al cliente</h6>
+                                        @if($order->repairOutcome?->delivered_at)
+                                            <p class="mb-2"><strong>Entregada:</strong> {{ $order->repairOutcome->delivered_at->format('Y-m-d H:i') }}</p>
+                                        @else
+                                            <p class="text-muted mb-2">Aún no marcada como entregada.</p>
+                                        @endif
+
+                                        @if($order->billingItems->isNotEmpty() && $order->repairOutcome && !$order->repairOutcome->delivered_at)
+                                            <form method="post" action="{{ route('worker.orders.deliver', $order) }}" onsubmit="return confirm('¿Confirmar entrega al cliente?')">
+                                                @csrf
+                                                <button class="btn btn-ui btn-primary-ui btn-sm" type="submit">Marcar como entregada</button>
+                                            </form>
+                                        @endif
                                     </div></div>
                                 </div>
                                 <div class="col-lg-7">

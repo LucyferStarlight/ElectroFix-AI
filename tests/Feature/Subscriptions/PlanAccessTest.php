@@ -86,6 +86,7 @@ class PlanAccessTest extends TestCase
     public function test_ai_quota_limit_blocks_with_functional_message(): void
     {
         [$company, $admin, $worker] = $this->createCompanyWithRoles();
+        Plan::query()->where('name', 'pro')->delete();
         Plan::factory()->create([
             'name' => 'pro',
             'ai_enabled' => true,

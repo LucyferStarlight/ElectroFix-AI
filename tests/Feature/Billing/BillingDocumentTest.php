@@ -113,6 +113,9 @@ class BillingDocumentTest extends TestCase
                 'customer_mode' => 'registered',
                 'customer_id' => $customer->id,
                 'tax_mode' => 'excluded',
+                'repair_outcome' => 'repaired',
+                'work_performed' => 'Reemplazo de componente y pruebas finales.',
+                'actual_amount_charged' => 500,
                 'items' => [
                     [
                         'item_kind' => 'service',
@@ -156,6 +159,10 @@ class BillingDocumentTest extends TestCase
                 'customer_mode' => 'registered',
                 'customer_id' => $customer->id,
                 'tax_mode' => 'excluded',
+                'repair_outcome' => 'partial',
+                'outcome_notes' => 'Cliente autorizó solo reparación parcial.',
+                'work_performed' => 'Ajuste y reemplazo de componente principal.',
+                'actual_amount_charged' => 520,
                 'items' => [
                     [
                         'item_kind' => 'service',

@@ -47,6 +47,7 @@ Route::middleware(['auth', 'must_change_password'])->group(function (): void {
         Route::get('/worker/orders', [OrderController::class, 'index'])->name('worker.orders');
         Route::post('/worker/orders', [OrderController::class, 'store'])->name('worker.orders.store');
         Route::patch('/worker/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('worker.orders.status');
+        Route::post('/worker/orders/{order}/deliver', [OrderController::class, 'deliver'])->name('worker.orders.deliver');
         Route::post('/worker/orders/diagnose', [OrderController::class, 'diagnose'])->name('worker.orders.diagnose');
 
         Route::get('/worker/customers', [CustomerController::class, 'index'])->name('worker.customers');

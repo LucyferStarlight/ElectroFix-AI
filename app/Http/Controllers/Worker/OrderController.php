@@ -12,6 +12,8 @@ use App\Models\TechnicianProfile;
 use App\Services\AiPlanPolicyService;
 use App\Services\AiUsageService;
 use App\Services\OrderCreationService;
+use App\Services\RepairOutcomeService;
+use App\Services\Exceptions\OutcomeNotFoundException;
 use App\Support\OrderStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +25,7 @@ class OrderController extends Controller
     {
         $user = $request->user();
         $orders = Order::query()
-            ->with(['customer', 'equipment'])
+            ->with(['customer', 'equipment', 'billingItems', 'repairOutcome'])
             ->orderByDesc('created_at');
 
         $customers = Customer::query()->orderBy('name');
@@ -104,6 +106,28 @@ class OrderController extends Controller
         $order->update(['status' => $request->validated('status')]);
 
         return back()->with('success', 'Estado de orden actualizado.');
+    }
+
+    public function deliver(Request $request, Order $order, RepairOutcomeService $repairOutcomeService): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+        $order->loadMissing('billingItems');
+
+        if ($order->billingItems->isEmpty()) {
+            abort(422, 'No puedes marcar una orden como entregada sin factura asociada.');
+        }
+
+        try {
+            $outcome = $repairOutcomeService->markDelivered($order, $request->user());
+        } catch (OutcomeNotFoundException $exception) {
+            abort(422, $exception->getMessage());
+        }
+
+        if (! $outcome->delivered_at) {
+            abort(422, 'No se pudo registrar la entrega de la orden.');
+        }
+
+        return back()->with('success', 'Orden marcada como entregada al cliente.');
     }
 
     public function diagnose(Request $request): JsonResponse

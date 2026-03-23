@@ -63,6 +63,9 @@ class BillingRepairFlowTest extends TestCase
             'customer_mode' => 'registered',
             'customer_id' => $customer->id,
             'tax_mode' => 'included',
+            'repair_outcome' => 'repaired',
+            'work_performed' => 'Sustitución de módulo averiado y calibración.',
+            'actual_amount_charged' => 1500,
             'items' => [
                 [
                     'description' => 'Reparación de equipo',
