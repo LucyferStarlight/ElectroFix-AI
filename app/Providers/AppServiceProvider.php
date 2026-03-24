@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\AiDiagnosticProvider;
 use App\Services\Ai\ArisProvider;
 use App\Services\Ai\GeminiProvider;
+use App\Services\Ai\GroqProvider;
 use App\Services\Ai\LocalFallbackProvider;
 use App\Models\Company;
 use App\Models\Order;
@@ -37,11 +38,19 @@ class AppServiceProvider extends ServiceProvider
                 return app(LocalFallbackProvider::class);
             }
 
+            if ($provider === 'groq') {
+                return app(GroqProvider::class);
+            }
+
             if ($apiKey === '') {
                 return app(LocalFallbackProvider::class);
             }
 
             return app(GeminiProvider::class);
+        });
+
+        $this->app->bind(ArisProvider::class, function () {
+            return new ArisProvider(app(GroqProvider::class));
         });
     }
 
