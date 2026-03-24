@@ -73,6 +73,22 @@ class RepairOutcomeService
         return $outcome->fresh();
     }
 
+    public function updateFeedback(Order $order, array $data): OrderRepairOutcome
+    {
+        $outcome = OrderRepairOutcome::query()->where('order_id', $order->id)->first();
+        if (! $outcome) {
+            throw new OutcomeNotFoundException('No existe cierre de reparación para esta orden.');
+        }
+
+        $outcome->update([
+            'diagnostic_accuracy' => $data['diagnostic_accuracy'],
+            'technician_notes' => $data['technician_notes'] ?? null,
+            'actual_causes' => $data['actual_causes'] ?? null,
+        ]);
+
+        return $outcome->fresh();
+    }
+
     private function shouldFeedAris(Order $order, Company $company): bool
     {
         $plan = $company->subscription?->plan ?? 'starter';

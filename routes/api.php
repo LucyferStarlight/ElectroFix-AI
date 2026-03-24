@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\EquipmentApiController;
 use App\Http\Controllers\Api\V1\InventoryItemApiController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\ProfileApiController;
+use App\Http\Controllers\Api\V1\RepairOutcomeApiController;
 use App\Http\Controllers\Api\Billing\StripeController;
 use App\Http\Controllers\Api\V1\SubscriptionApiController;
 use App\Support\ApiAbility;
@@ -37,6 +38,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/orders/{order}/status', [OrderApiController::class, 'updateStatus'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
         Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])
             ->middleware(['token_ability:'.ApiAbility::AI_USE, 'throttle:ai-diagnostics']);
+        Route::patch('/orders/{order}/repair-outcome/feedback', [RepairOutcomeApiController::class, 'update'])
+            ->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
 
         Route::get('/inventory/items', [InventoryItemApiController::class, 'index'])->middleware('token_ability:'.ApiAbility::INVENTORY_WRITE);
         Route::post('/inventory/items', [InventoryItemApiController::class, 'store'])->middleware('token_ability:'.ApiAbility::INVENTORY_WRITE);
