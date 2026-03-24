@@ -21,6 +21,9 @@ class OrderRepairOutcome extends Model
         'actual_amount_charged',
         'aris_estimated_cost',
         'had_ai_diagnosis',
+        'diagnostic_accuracy',
+        'technician_notes',
+        'actual_causes',
         'feeds_aris_training',
         'plan_at_close',
         'delivered_at',
@@ -33,6 +36,7 @@ class OrderRepairOutcome extends Model
             'actual_amount_charged' => 'decimal:2',
             'aris_estimated_cost' => 'decimal:2',
             'had_ai_diagnosis' => 'boolean',
+            'actual_causes' => 'array',
             'feeds_aris_training' => 'boolean',
             'delivered_at' => 'datetime',
         ];

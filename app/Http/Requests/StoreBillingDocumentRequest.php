@@ -66,6 +66,10 @@ class StoreBillingDocumentRequest extends FormRequest
             'outcome_notes' => ['nullable', 'string', 'max:1000', 'required_if:repair_outcome,partial'],
             'work_performed' => [Rule::requiredIf($requiresRepairOutcome), 'nullable', 'string', 'max:800'],
             'actual_amount_charged' => [Rule::requiredIf($requiresRepairOutcome), 'nullable', 'numeric', 'min:0', 'max:99999999.99'],
+            'diagnostic_accuracy' => ['nullable', Rule::in(['correct', 'partial', 'incorrect'])],
+            'technician_notes' => ['nullable', 'string', 'max:1000'],
+            'actual_causes' => ['nullable', 'array'],
+            'actual_causes.*' => ['string', 'max:255'],
         ];
     }
 }
