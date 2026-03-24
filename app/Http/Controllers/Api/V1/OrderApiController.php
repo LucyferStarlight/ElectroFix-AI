@@ -9,10 +9,9 @@ use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Http\Resources\Api\V1\OrderDiagnosticResource;
 use App\Http\Resources\Api\V1\OrderResource;
+use App\Jobs\ProcessAiDiagnosticJob;
 use App\Models\Order;
-use App\Services\AiDiagnosticService;
 use App\Services\OrderCreationService;
-use App\Services\Exceptions\AiQuotaExceededException;
 use Illuminate\Http\Request;
 
 class OrderApiController extends Controller
@@ -21,8 +20,7 @@ class OrderApiController extends Controller
     use InteractsWithCompanyScope;
 
     public function __construct(
-        private readonly OrderCreationService $orderCreationService,
-        private readonly AiDiagnosticService $aiDiagnosticService
+        private readonly OrderCreationService $orderCreationService
     ) {
     }
 
@@ -98,22 +96,55 @@ class OrderApiController extends Controller
 
         $company = $order->company;
         $symptoms = (string) $data['symptoms'];
-        try {
-            $this->aiDiagnosticService->diagnose($order, $company, $request->user(), $symptoms);
-        } catch (AiQuotaExceededException $exception) {
+        $order->update(['ai_diagnosis_pending' => true, 'ai_diagnosis_error' => null]);
+        ProcessAiDiagnosticJob::dispatch($order, $company, $request->user(), $symptoms);
+
+        return response()->json([
+            'ok' => true,
+            'data' => null,
+            'meta' => ['status' => 'processing'],
+            'message' => 'Diagnóstico en proceso. Consulta GET /orders/{order}/diagnostics en unos segundos.',
+        ], 202);
+    }
+
+    public function showLatestDiagnostic(Request $request, Order $order)
+    {
+        $this->assertCompanyAccess($request, $order->company_id);
+        $order->loadMissing('latestDiagnostic');
+
+        if ($order->ai_diagnosis_pending) {
+            return response()->json([
+                'ok' => true,
+                'data' => null,
+                'meta' => ['status' => 'processing'],
+                'error' => null,
+            ], 202);
+        }
+
+        if ($order->ai_diagnosis_error !== null) {
             return response()->json([
                 'ok' => false,
                 'data' => null,
                 'meta' => [],
                 'error' => [
-                    'code' => strtoupper($exception->status()),
-                    'message' => $exception->getMessage(),
+                    'code' => 'AI_DIAGNOSTIC_ERROR',
+                    'message' => $order->ai_diagnosis_error,
                 ],
             ], 422);
         }
 
-        $order->loadMissing('latestDiagnostic');
+        if ($order->latestDiagnostic) {
+            return $this->successResource(new OrderDiagnosticResource($order->latestDiagnostic));
+        }
 
-        return $this->successResource(new OrderDiagnosticResource($order->latestDiagnostic), status: 201);
+        return response()->json([
+            'ok' => false,
+            'data' => null,
+            'meta' => [],
+            'error' => [
+                'code' => 'DIAGNOSTIC_NOT_FOUND',
+                'message' => 'No existe diagnóstico IA para esta orden.',
+            ],
+        ], 404);
     }
 }

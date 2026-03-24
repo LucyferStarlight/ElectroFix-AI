@@ -38,6 +38,8 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/orders/{order}/status', [OrderApiController::class, 'updateStatus'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
         Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])
             ->middleware(['token_ability:'.ApiAbility::AI_USE, 'throttle:ai-diagnostics']);
+        Route::get('/orders/{order}/diagnostics/latest', [OrderApiController::class, 'showLatestDiagnostic'])
+            ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::patch('/orders/{order}/repair-outcome/feedback', [RepairOutcomeApiController::class, 'update'])
             ->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
 
