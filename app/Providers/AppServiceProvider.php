@@ -50,7 +50,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(ArisProvider::class, function () {
-            return new ArisProvider(app(GroqProvider::class));
+            return new ArisProvider();
         });
     }
 

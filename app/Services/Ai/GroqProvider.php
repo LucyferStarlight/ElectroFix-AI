@@ -11,9 +11,11 @@ use Illuminate\Support\Facades\Http;
 
 class GroqProvider implements AiDiagnosticProvider
 {
-    public function __construct(private readonly AiDiagnosticFormatter $formatter)
-    {
-    }
+    public function __construct(
+        private readonly AiDiagnosticFormatter $formatter,
+        private readonly ?string $modelOverride = null,
+        private readonly ?string $systemPromptOverride = null,
+    ) {}
 
     public function diagnose(string $symptoms, string $deviceInfo): AiDiagnosticResult
     {
@@ -22,10 +24,10 @@ class GroqProvider implements AiDiagnosticProvider
             throw new AiProviderException('missing_config', 'El servicio de diagnóstico IA no está configurado.');
         }
 
-        $model = (string) config('services.groq.model', 'llama-3.3-70b-versatile');
+        $model = $this->modelOverride ?? (string) config('services.groq.model', 'llama-3.3-70b-versatile');
         $timeout = (int) config('services.groq.timeout_seconds', 15);
         $prompt = $this->buildPrompt($deviceInfo, $symptoms);
-        $systemPrompt = (string) config(
+        $systemPrompt = $this->systemPromptOverride ?? (string) config(
             'services.groq.system_prompt',
             'Eres un asistente técnico de reparación de electrodomésticos. Responde únicamente en es-MX. Devuelve SOLO JSON válido.'
         );
