@@ -4,7 +4,7 @@ return [
     'starter' => [
         'label' => 'Básico',
         'price' => env('PLAN_PRICE_STARTER', 299),
-        'ai_enabled' => false,
+        'ai_enabled' => true,
         'features' => [
             'Gestión básica de órdenes',
             'Inventario esencial',
@@ -16,7 +16,7 @@ return [
     'pro' => [
         'label' => 'Profesional',
         'price' => env('PLAN_PRICE_PRO', 599),
-        'ai_enabled' => false,
+        'ai_enabled' => true,
         'features' => [
             'Órdenes y equipos ilimitados',
             'Inventario completo',

@@ -96,13 +96,6 @@ class GroqProvider implements AiDiagnosticProvider
         return AiDiagnosticResult::fromPayload($normalized, 'groq', $tokensUsed);
     }
 
-    public static function buildSystemPrompt(): string
-    {
-        return 'Eres ARIS, sistema experto de diagnóstico de electrodomésticos de ElectroFix. '
-            .'Responde únicamente en es-MX. Sé más específico y técnico que un asistente genérico. '
-            .'Devuelve SOLO JSON válido con el schema definido.';
-    }
-
     private function buildPrompt(string $deviceInfo, string $symptoms): string
     {
         $language = 'es-MX';
