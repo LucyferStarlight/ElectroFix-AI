@@ -10,8 +10,6 @@ use App\Models\InventoryItem;
 use App\Models\Order;
 use App\Support\OrderStatus;
 use App\Services\BillingService;
-use App\Services\RepairOutcomeService;
-use App\Services\Exceptions\RepairOutcomeAlreadyClosedException;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -21,8 +19,7 @@ use Illuminate\Support\Facades\DB;
 class BillingController extends Controller
 {
     public function __construct(
-        private readonly BillingService $billingService,
-        private readonly RepairOutcomeService $repairOutcomeService
+        private readonly BillingService $billingService
     ) {}
 
     public function index(Request $request)
@@ -71,18 +68,10 @@ class BillingController extends Controller
 
         $payload = $request->validated();
         try {
-            $document = DB::transaction(function () use ($user, $payload) {
-                $created = $this->billingService->createDocument($user->company, $user, $payload);
-
-                if (in_array($created->source, ['repair', 'mixed'], true)) {
-                    $this->repairOutcomeService->closeFromBillingDocument($created, $payload);
-                }
-
-                return $created;
-            });
+            $document = DB::transaction(fn () => $this->billingService->createDocument($user->company, $user, $payload));
         } catch (\InvalidArgumentException $exception) {
             abort(422, $exception->getMessage());
-        } catch (RepairOutcomeAlreadyClosedException $exception) {
+        } catch (\App\Services\Exceptions\RepairOutcomeAlreadyClosedException $exception) {
             abort(422, $exception->getMessage());
         }
 

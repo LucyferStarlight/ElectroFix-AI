@@ -79,7 +79,18 @@ class BillingDocumentApiController extends Controller
         }
 
         $company = Company::query()->findOrFail($companyId);
-        $document = $this->billingService->createDocument($company, $user, $request->validated());
+        $document = $this->billingService->createDocument($company, $user, array_merge(
+            $request->validated(),
+            $request->only([
+                'repair_outcome',
+                'outcome_notes',
+                'work_performed',
+                'actual_amount_charged',
+                'diagnostic_accuracy',
+                'technician_notes',
+                'actual_causes',
+            ])
+        ));
 
         return $this->successResource(
             new BillingDocumentResource($document->loadMissing(['items', 'customer', 'user'])),

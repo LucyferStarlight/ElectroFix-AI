@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 class BillingService
 {
+    public function __construct(private readonly RepairOutcomeService $repairOutcomeService)
+    {
+    }
+
     public function createDocument(Company $company, User $actor, array $payload): BillingDocument
     {
         return DB::transaction(function () use ($company, $actor, $payload): BillingDocument {
@@ -58,6 +62,10 @@ class BillingService
 
             if ($document->document_type === 'invoice') {
                 $this->consumeInventoryForInvoice($company, $items, $actor);
+            }
+
+            if (in_array($document->source, ['repair', 'mixed'], true) && isset($payload['repair_outcome'])) {
+                $this->repairOutcomeService->closeFromBillingDocument($document, $payload);
             }
 
             return $document->fresh(['items.order', 'items.inventoryItem', 'customer', 'company', 'user']);
