@@ -9,7 +9,8 @@ return [
             'Gestión básica de órdenes',
             'Inventario esencial',
             'Facturación interna',
-            'Soporte por correo',
+            'Diagnóstico IA · 10 consultas/mes',
+            'Contribuye al entrenamiento de ARIS',
         ],
     ],
     'pro' => [
@@ -21,6 +22,8 @@ return [
             'Inventario completo',
             'Facturación interna avanzada',
             'Reportes operativos',
+            'Diagnóstico IA · 70 consultas/mes',
+            'Entrenamiento ARIS por caso con IA',
         ],
     ],
     'enterprise' => [

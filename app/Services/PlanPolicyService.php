@@ -8,17 +8,17 @@ class PlanPolicyService
 {
     private const DEFAULTS = [
         'starter' => [
-            'ai_enabled' => false,
-            'max_ai_requests' => 0,
-            'max_ai_tokens' => 0,
+            'ai_enabled' => true,
+            'max_ai_requests' => 10,
+            'max_ai_tokens' => 8000,
             'overage_enabled' => false,
             'overage_price_per_request' => 0,
             'overage_price_per_1000_tokens' => 0,
         ],
         'pro' => [
             'ai_enabled' => true,
-            'max_ai_requests' => 100,
-            'max_ai_tokens' => 60000,
+            'max_ai_requests' => 70,
+            'max_ai_tokens' => 50000,
             'overage_enabled' => false,
             'overage_price_per_request' => 0,
             'overage_price_per_1000_tokens' => 0,
