@@ -4,12 +4,30 @@ namespace App\Services\Ai;
 
 use App\Contracts\AiDiagnosticProvider;
 use App\DTOs\AiDiagnosticResult;
-use App\Services\Exceptions\ArisNotAvailableException;
 
 class ArisProvider implements AiDiagnosticProvider
 {
+    public function __construct(private readonly GroqProvider $groqProvider)
+    {
+    }
+
     public function diagnose(string $symptoms, string $deviceInfo): AiDiagnosticResult
     {
-        throw new ArisNotAvailableException('ARIS Repair no está disponible aún en este plan.');
+        $previousModel = config('services.groq.model');
+        $previousPrompt = config('services.groq.system_prompt');
+
+        config([
+            'services.groq.model' => config('services.groq.aris_model', 'llama-3.3-70b-versatile'),
+            'services.groq.system_prompt' => GroqProvider::buildSystemPrompt(),
+        ]);
+
+        try {
+            return $this->groqProvider->diagnose($symptoms, $deviceInfo);
+        } finally {
+            config([
+                'services.groq.model' => $previousModel,
+                'services.groq.system_prompt' => $previousPrompt,
+            ]);
+        }
     }
 }
