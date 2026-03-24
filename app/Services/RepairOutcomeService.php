@@ -92,10 +92,16 @@ class RepairOutcomeService
     private function shouldFeedAris(Order $order, Company $company): bool
     {
         $plan = $company->subscription?->plan ?? 'starter';
+
+        // Starter siempre alimenta el entrenamiento de ARIS,
+        // independientemente de si se usó diagnóstico IA en la orden.
         if ($plan === 'starter') {
             return true;
         }
 
+        // Pro y Enterprise solo alimentan cuando la orden tuvo diagnóstico IA.
+        // Esto garantiza que el dato de entrenamiento siempre tenga
+        // un diagnóstico IA contra el cual comparar el resultado real.
         return (bool) $order->ai_diagnosed_at;
     }
 
