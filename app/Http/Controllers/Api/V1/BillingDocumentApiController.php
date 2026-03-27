@@ -11,6 +11,7 @@ use App\Models\BillingDocument;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Services\BillingService;
+use App\Services\Exceptions\OrderWorkflowException;
 use Illuminate\Http\Request;
 
 class BillingDocumentApiController extends Controller
@@ -18,14 +19,12 @@ class BillingDocumentApiController extends Controller
     use ApiResponse;
     use InteractsWithCompanyScope;
 
-    public function __construct(private readonly BillingService $billingService)
-    {
-    }
+    public function __construct(private readonly BillingService $billingService) {}
 
     public function index(Request $request)
     {
         $query = BillingDocument::query()
-            ->with(['items', 'customer', 'user'])
+            ->with(['items', 'customer', 'user', 'order'])
             ->latest('issued_at');
 
         $this->applyCompanyScope($query, $request);
@@ -79,21 +78,33 @@ class BillingDocumentApiController extends Controller
         }
 
         $company = Company::query()->findOrFail($companyId);
-        $document = $this->billingService->createDocument($company, $user, array_merge(
-            $request->validated(),
-            $request->only([
-                'repair_outcome',
-                'outcome_notes',
-                'work_performed',
-                'actual_amount_charged',
-                'diagnostic_accuracy',
-                'technician_notes',
-                'actual_causes',
-            ])
-        ));
+        try {
+            $document = $this->billingService->createDocument($company, $user, array_merge(
+                $request->validated(),
+                $request->only([
+                    'repair_outcome',
+                    'outcome_notes',
+                    'work_performed',
+                    'actual_amount_charged',
+                    'diagnostic_accuracy',
+                    'technician_notes',
+                    'actual_causes',
+                ])
+            ));
+        } catch (OrderWorkflowException $exception) {
+            return response()->json([
+                'ok' => false,
+                'data' => null,
+                'meta' => [],
+                'error' => [
+                    'code' => 'INVALID_ORDER_WORKFLOW_ACTION',
+                    'message' => $exception->getMessage(),
+                ],
+            ], 422);
+        }
 
         return $this->successResource(
-            new BillingDocumentResource($document->loadMissing(['items', 'customer', 'user'])),
+            new BillingDocumentResource($document->loadMissing(['items', 'customer', 'user', 'order'])),
             status: 201
         );
     }

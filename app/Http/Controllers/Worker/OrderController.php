@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Worker;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ApproveOrderRequest;
+use App\Http\Requests\RejectOrderRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Models\Customer;
@@ -11,10 +13,15 @@ use App\Models\Order;
 use App\Models\TechnicianProfile;
 use App\Services\AiPlanPolicyService;
 use App\Services\AiUsageService;
-use App\Services\OrderCustomerNotificationService;
-use App\Services\OrderCreationService;
-use App\Services\RepairOutcomeService;
+use App\Services\Exceptions\InvalidOrderStatusTransitionException;
+use App\Services\Exceptions\OrderApprovalException;
+use App\Services\Exceptions\OrderWorkflowException;
 use App\Services\Exceptions\OutcomeNotFoundException;
+use App\Services\OrderCreationService;
+use App\Services\OrderCustomerNotificationService;
+use App\Services\OrderStateMachine;
+use App\Services\OrderWorkflowValidator;
+use App\Services\RepairOutcomeService;
 use App\Support\OrderStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -92,8 +99,7 @@ class OrderController extends Controller
         StoreOrderRequest $request,
         OrderCreationService $orderCreationService,
         OrderCustomerNotificationService $orderCustomerNotificationService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $result = $orderCreationService->create($request->user(), $request->validated());
         $warning = $result['ai_warning'] ?? null;
         $order = $result['order'] ?? null;
@@ -113,14 +119,18 @@ class OrderController extends Controller
     public function updateStatus(
         UpdateOrderStatusRequest $request,
         Order $order,
+        OrderStateMachine $orderStateMachine,
         OrderCustomerNotificationService $orderCustomerNotificationService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $this->authorizeOrder($request, $order);
         $previousStatus = (string) $order->status;
-        $newStatus = (string) $request->validated('status');
+        $newStatus = OrderStatus::normalize((string) $request->validated('status'));
 
-        $order->update(['status' => $newStatus]);
+        try {
+            $orderStateMachine->transition($order, $newStatus);
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+            return back()->withErrors(['status' => $exception->getMessage()]);
+        }
 
         if ($previousStatus !== $newStatus) {
             $orderCustomerNotificationService->sendStatusChanged($order->fresh(), $previousStatus, $newStatus);
@@ -129,18 +139,49 @@ class OrderController extends Controller
         return back()->with('success', 'Estado de orden actualizado.');
     }
 
+    public function approve(ApproveOrderRequest $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $order->approve(
+                $request->validated('approved_by') ?? 'customer',
+                (string) $request->validated('approval_channel')
+            );
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+            return back()->withErrors(['approval' => $exception->getMessage()]);
+        }
+
+        return back()->with('success', 'Orden aprobada correctamente.');
+    }
+
+    public function reject(RejectOrderRequest $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($request, $order);
+
+        try {
+            $order->reject((string) $request->validated('reason'));
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+            return back()->withErrors(['approval' => $exception->getMessage()]);
+        }
+
+        return back()->with('success', 'Orden rechazada correctamente.');
+    }
+
     public function deliver(
         Request $request,
         Order $order,
+        OrderWorkflowValidator $orderWorkflowValidator,
         RepairOutcomeService $repairOutcomeService,
         OrderCustomerNotificationService $orderCustomerNotificationService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $this->authorizeOrder($request, $order);
-        $order->loadMissing('billingItems');
+        $order->loadMissing('billingItems', 'repairOutcome');
 
-        if ($order->billingItems->isEmpty()) {
-            abort(422, 'No puedes marcar una orden como entregada sin factura asociada.');
+        try {
+            $orderWorkflowValidator->ensureCanDeliver($order);
+        } catch (OrderWorkflowException $exception) {
+            abort(422, $exception->getMessage());
         }
 
         try {
@@ -169,6 +210,21 @@ class OrderController extends Controller
 
         if ($request->user()->role !== 'developer' && $equipment->company_id !== $request->user()->company_id) {
             abort(403, 'No puedes analizar equipos fuera de tu empresa.');
+        }
+
+        $order = Order::query()
+            ->where('equipment_id', $equipment->id)
+            ->latest('id')
+            ->first();
+
+        if ($order) {
+            try {
+                app(OrderWorkflowValidator::class)->ensureCanDiagnose($order);
+            } catch (OrderWorkflowException $exception) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                ], 422);
+            }
         }
 
         return response()->json([

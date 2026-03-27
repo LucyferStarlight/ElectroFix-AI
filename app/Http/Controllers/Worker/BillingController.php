@@ -8,8 +8,9 @@ use App\Models\BillingDocument;
 use App\Models\Customer;
 use App\Models\InventoryItem;
 use App\Models\Order;
-use App\Support\OrderStatus;
 use App\Services\BillingService;
+use App\Services\Exceptions\OrderWorkflowException;
+use App\Support\OrderStatus;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -72,6 +73,8 @@ class BillingController extends Controller
         } catch (\InvalidArgumentException $exception) {
             abort(422, $exception->getMessage());
         } catch (\App\Services\Exceptions\RepairOutcomeAlreadyClosedException $exception) {
+            abort(422, $exception->getMessage());
+        } catch (OrderWorkflowException $exception) {
             abort(422, $exception->getMessage());
         }
 

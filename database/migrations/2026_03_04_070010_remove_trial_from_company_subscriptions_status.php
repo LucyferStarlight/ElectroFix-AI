@@ -12,11 +12,13 @@ return new class extends Migration
             return;
         }
 
-        DB::statement(
-            "ALTER TABLE company_subscriptions
-             MODIFY status ENUM('active','trialing','past_due','canceled','suspended')
-             NOT NULL DEFAULT 'trialing'"
-        );
+        if ($this->usesMysql()) {
+            DB::statement(
+                "ALTER TABLE company_subscriptions
+                 MODIFY status ENUM('active','trialing','past_due','canceled','suspended')
+                 NOT NULL DEFAULT 'trialing'"
+            );
+        }
     }
 
     public function down(): void
@@ -25,11 +27,17 @@ return new class extends Migration
             return;
         }
 
-        DB::statement(
-            "ALTER TABLE company_subscriptions
-             MODIFY status ENUM('active','trial','trialing','past_due','canceled','suspended')
-             NOT NULL DEFAULT 'trialing'"
-        );
+        if ($this->usesMysql()) {
+            DB::statement(
+                "ALTER TABLE company_subscriptions
+                 MODIFY status ENUM('active','trial','trialing','past_due','canceled','suspended')
+                 NOT NULL DEFAULT 'trialing'"
+            );
+        }
+    }
+
+    private function usesMysql(): bool
+    {
+        return in_array(DB::getDriverName(), ['mysql', 'mariadb'], true);
     }
 };
-

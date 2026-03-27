@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Models\BillingDocument;
+use App\Models\BillingDocumentItem;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\InventoryItem;
@@ -14,8 +15,8 @@ use Tests\Traits\CreatesCompanyWithRoles;
 
 class BillingDocumentTest extends TestCase
 {
-    use RefreshDatabase;
     use CreatesCompanyWithRoles;
+    use RefreshDatabase;
 
     public function test_can_create_sale_document_with_inventory_products(): void
     {
@@ -295,5 +296,142 @@ class BillingDocumentTest extends TestCase
             'company_id' => $company->id,
             'source' => 'sale',
         ]);
+    }
+
+    public function test_quote_is_created_as_versioned_active_document_for_order(): void
+    {
+        [$company, $admin, $worker] = $this->createCompanyWithRoles([], [], ['can_access_billing' => true]);
+        $this->createActiveSubscription($company);
+
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'status' => OrderStatus::CREATED,
+        ]);
+
+        $response = $this->actingAs($worker)
+            ->post(route('worker.billing.store'), [
+                'document_type' => 'quote',
+                'source' => 'repair',
+                'customer_mode' => 'registered',
+                'customer_id' => $customer->id,
+                'tax_mode' => 'excluded',
+                'status' => 'sent',
+                'items' => [
+                    [
+                        'item_kind' => 'service',
+                        'description' => 'Diagnóstico y reparación',
+                        'quantity' => 1,
+                        'unit_price' => 850,
+                        'order_id' => $order->id,
+                    ],
+                ],
+            ]);
+
+        $response->assertRedirect();
+
+        $quote = BillingDocument::query()->where('order_id', $order->id)->latest('id')->firstOrFail();
+
+        $this->assertSame('quote', $quote->document_type);
+        $this->assertSame(1, $quote->version);
+        $this->assertSame('sent', $quote->status);
+        $this->assertTrue($quote->is_active);
+        $this->assertSame($order->id, $quote->order_id);
+        $this->assertSame(OrderStatus::QUOTED, $order->fresh()->status);
+    }
+
+    public function test_create_new_quote_version_deactivates_previous_one(): void
+    {
+        [$company, $admin, $worker] = $this->createCompanyWithRoles([], [], ['can_access_billing' => true]);
+        $this->createActiveSubscription($company);
+
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'status' => OrderStatus::QUOTED,
+        ]);
+
+        $quoteV1 = BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'sent',
+            'version' => 1,
+            'is_active' => true,
+        ]);
+
+        BillingDocumentItem::factory()->create([
+            'billing_document_id' => $quoteV1->id,
+            'order_id' => $order->id,
+            'inventory_item_id' => null,
+            'item_kind' => 'service',
+            'description' => 'Mano de obra inicial',
+            'quantity' => 1,
+            'unit_price' => 500,
+            'line_subtotal' => 500,
+            'line_vat' => 80,
+            'line_total' => 580,
+        ]);
+
+        $quoteV2 = $quoteV1->createNewVersion($worker, [
+            'status' => 'draft',
+            'notes' => 'Versión ajustada por refacciones adicionales.',
+            'items' => [
+                [
+                    'item_kind' => 'service',
+                    'description' => 'Mano de obra ajustada',
+                    'quantity' => 1,
+                    'unit_price' => 650,
+                    'order_id' => $order->id,
+                ],
+            ],
+        ]);
+
+        $this->assertSame(2, $quoteV2->version);
+        $this->assertSame('draft', $quoteV2->status);
+        $this->assertTrue($quoteV2->is_active);
+        $this->assertFalse($quoteV1->fresh()->is_active);
+    }
+
+    public function test_approving_quote_approves_related_order(): void
+    {
+        [$company, $admin, $worker] = $this->createCompanyWithRoles([], [], ['can_access_billing' => true]);
+        $this->createActiveSubscription($company);
+
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'status' => OrderStatus::QUOTED,
+        ]);
+
+        $quote = BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'sent',
+            'version' => 1,
+            'is_active' => true,
+        ]);
+
+        $quote->approveQuote('customer', 'whatsapp');
+
+        $this->assertSame('approved', $quote->fresh()->status);
+        $this->assertTrue($quote->fresh()->is_active);
+        $this->assertSame(OrderStatus::APPROVED, $order->fresh()->status);
+        $this->assertSame('customer', $order->fresh()->approved_by);
+        $this->assertSame('whatsapp', $order->fresh()->approval_channel);
     }
 }

@@ -35,6 +35,22 @@ return new class extends Migration
 
     private function indexExists(string $indexName): bool
     {
+        if (! Schema::hasTable('company_subscriptions')) {
+            return false;
+        }
+
+        if (DB::getDriverName() === 'sqlite') {
+            $indexes = DB::select("PRAGMA index_list('company_subscriptions')");
+
+            foreach ($indexes as $index) {
+                if (($index->name ?? null) === $indexName) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         $result = DB::selectOne(
             "SELECT COUNT(1) AS aggregate
              FROM information_schema.STATISTICS

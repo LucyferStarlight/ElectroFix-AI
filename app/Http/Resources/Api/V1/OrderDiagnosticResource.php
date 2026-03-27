@@ -15,7 +15,12 @@ class OrderDiagnosticResource extends JsonResource
             'version' => $this->version,
             'source' => $this->source,
             'symptoms_snapshot' => $this->symptoms_snapshot,
+            'normalized_symptoms' => $this->normalized_symptoms,
+            'symptom_keywords' => $this->symptom_keywords ?? [],
+            'equipment_type' => $this->equipment_type,
             'diagnostic_summary' => $this->diagnostic_summary,
+            'failure_type' => $this->failure_type,
+            'diagnostic_signature' => $this->diagnostic_signature,
             'possible_causes' => $this->possible_causes ?? [],
             'recommended_actions' => $this->recommended_actions ?? [],
             'requires_parts_replacement' => (bool) $this->requires_parts_replacement,
@@ -37,4 +42,3 @@ class OrderDiagnosticResource extends JsonResource
         ];
     }
 }
-

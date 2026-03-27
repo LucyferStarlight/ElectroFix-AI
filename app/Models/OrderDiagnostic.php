@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,13 +13,20 @@ class OrderDiagnostic extends Model
 
     protected $fillable = [
         'company_id',
+        'customer_id',
         'order_id',
+        'equipment_id',
         'version',
         'created_by_user_id',
         'source',
         'symptoms_snapshot',
+        'normalized_symptoms',
+        'symptom_keywords',
         'equipment_snapshot',
+        'equipment_type',
         'diagnostic_summary',
+        'failure_type',
+        'diagnostic_signature',
         'possible_causes',
         'recommended_actions',
         'requires_parts_replacement',
@@ -38,6 +46,7 @@ class OrderDiagnostic extends Model
     {
         return [
             'equipment_snapshot' => 'array',
+            'symptom_keywords' => 'array',
             'possible_causes' => 'array',
             'recommended_actions' => 'array',
             'requires_parts_replacement' => 'boolean',
@@ -58,9 +67,33 @@ class OrderDiagnostic extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function equipment(): BelongsTo
+    {
+        return $this->belongsTo(Equipment::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
-}
 
+    public function scopeForCustomer(Builder $query, int $customerId): Builder
+    {
+        return $query->where('customer_id', $customerId);
+    }
+
+    public function scopeForEquipment(Builder $query, int $equipmentId): Builder
+    {
+        return $query->where('equipment_id', $equipmentId);
+    }
+
+    public function scopeForFailureType(Builder $query, string $failureType): Builder
+    {
+        return $query->where('failure_type', $failureType);
+    }
+}

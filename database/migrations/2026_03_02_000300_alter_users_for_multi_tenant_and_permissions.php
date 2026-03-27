@@ -18,12 +18,16 @@ return new class extends Migration
             $table->index(['company_id', 'role', 'is_active']);
         });
 
-        DB::statement("ALTER TABLE users MODIFY role ENUM('admin','worker','developer') NOT NULL DEFAULT 'worker'");
+        if ($this->usesMysql()) {
+            DB::statement("ALTER TABLE users MODIFY role ENUM('admin','worker','developer') NOT NULL DEFAULT 'worker'");
+        }
     }
 
     public function down(): void
     {
-        DB::statement("ALTER TABLE users MODIFY role VARCHAR(255) NOT NULL DEFAULT 'worker'");
+        if ($this->usesMysql()) {
+            DB::statement("ALTER TABLE users MODIFY role VARCHAR(255) NOT NULL DEFAULT 'worker'");
+        }
 
         Schema::table('users', function (Blueprint $table): void {
             $table->dropIndex('users_company_id_role_is_active_index');
@@ -31,5 +35,10 @@ return new class extends Migration
             $table->dropColumn(['is_active', 'can_access_billing', 'can_access_inventory']);
             $table->dropSoftDeletes();
         });
+    }
+
+    private function usesMysql(): bool
+    {
+        return in_array(DB::getDriverName(), ['mysql', 'mariadb'], true);
     }
 };

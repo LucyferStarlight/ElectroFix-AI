@@ -12,11 +12,13 @@ return new class extends Migration
             return;
         }
 
-        DB::statement(
-            "ALTER TABLE company_subscriptions
-             MODIFY status ENUM('active','trial','trialing','past_due','canceled','suspended')
-             NOT NULL DEFAULT 'trialing'"
-        );
+        if ($this->usesMysql()) {
+            DB::statement(
+                "ALTER TABLE company_subscriptions
+                 MODIFY status ENUM('active','trial','trialing','past_due','canceled','suspended')
+                 NOT NULL DEFAULT 'trialing'"
+            );
+        }
 
         DB::table('company_subscriptions')
             ->where('status', 'trial')
@@ -33,11 +35,17 @@ return new class extends Migration
             ->where('status', 'trialing')
             ->update(['status' => 'trial']);
 
-        DB::statement(
-            "ALTER TABLE company_subscriptions
-             MODIFY status ENUM('active','trial','past_due','canceled','suspended')
-             NOT NULL DEFAULT 'trial'"
-        );
+        if ($this->usesMysql()) {
+            DB::statement(
+                "ALTER TABLE company_subscriptions
+                 MODIFY status ENUM('active','trial','past_due','canceled','suspended')
+                 NOT NULL DEFAULT 'trial'"
+            );
+        }
+    }
+
+    private function usesMysql(): bool
+    {
+        return in_array(DB::getDriverName(), ['mysql', 'mariadb'], true);
     }
 };
-

@@ -10,65 +10,61 @@ use App\Models\Equipment;
 use App\Models\InventoryItem;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Exceptions\QuoteVersionException;
 use App\Support\OrderStatus;
 use Illuminate\Support\Facades\DB;
 
 class BillingService
 {
-    public function __construct(private readonly RepairOutcomeService $repairOutcomeService)
-    {
-    }
+    public function __construct(
+        private readonly RepairOutcomeService $repairOutcomeService,
+        private readonly OrderStateMachine $orderStateMachine,
+        private readonly OrderWorkflowValidator $orderWorkflowValidator
+    ) {}
 
     public function createDocument(Company $company, User $actor, array $payload): BillingDocument
     {
         return DB::transaction(function () use ($company, $actor, $payload): BillingDocument {
-            $vatRate = ((float) $company->vat_percentage) / 100;
-            $taxMode = $payload['tax_mode'];
+            return $this->persistDocument($company, $actor, $payload);
+        });
+    }
 
-            [$subtotal, $vatAmount, $total, $items] = $this->buildItemsAndTotals($company, $vatRate, $taxMode, $payload['items']);
+    public function createNewQuoteVersion(BillingDocument $quote, User $actor, array $payload): BillingDocument
+    {
+        if (! $quote->isQuote()) {
+            throw QuoteVersionException::onlyQuotesCanBeVersioned();
+        }
 
-            $document = BillingDocument::query()->create([
-                'company_id' => $company->id,
-                'user_id' => $actor->id,
-                'customer_id' => $payload['customer_mode'] === 'registered' ? $payload['customer_id'] : null,
-                'document_number' => $this->nextDocumentNumber($company),
-                'document_type' => $payload['document_type'],
-                'customer_mode' => $payload['customer_mode'],
-                'walk_in_name' => $payload['customer_mode'] === 'walk_in'
-                    ? ($payload['walk_in_name'] ?: 'Cliente de Mostrador')
-                    : null,
-                'source' => $payload['source'],
-                'tax_mode' => $taxMode,
-                'vat_percentage' => $company->vat_percentage,
-                'subtotal' => $subtotal,
-                'vat_amount' => $vatAmount,
-                'total' => $total,
-                'notes' => $payload['notes'] ?? null,
-                'issued_at' => now(),
-            ]);
+        $quote->loadMissing('order', 'company');
 
-            if ($payload['customer_mode'] === 'walk_in') {
-                $items = $this->attachWalkInServiceOrders($company, $actor, $document, $items);
-            } else {
-                $this->applyLinkedServiceOrderStatus($company, $items, $payload['document_type']);
-            }
+        if (! $quote->order || ! $quote->company) {
+            throw QuoteVersionException::quoteRequiresSingleOrder();
+        }
 
-            foreach ($items as $item) {
-                BillingDocumentItem::query()->create([
-                    'billing_document_id' => $document->id,
-                    ...$item,
-                ]);
-            }
+        return DB::transaction(function () use ($quote, $actor, $payload): BillingDocument {
+            $basePayload = array_merge([
+                'document_type' => 'quote',
+                'source' => $quote->source,
+                'customer_mode' => $quote->customer_mode,
+                'customer_id' => $quote->customer_id,
+                'walk_in_name' => $quote->walk_in_name,
+                'tax_mode' => $quote->tax_mode,
+                'notes' => $quote->notes,
+                'items' => $quote->items()
+                    ->get()
+                    ->map(fn (BillingDocumentItem $item): array => [
+                        'item_kind' => $item->item_kind,
+                        'description' => $item->description,
+                        'quantity' => (float) $item->quantity,
+                        'unit_price' => (float) $item->unit_price,
+                        'inventory_item_id' => $item->inventory_item_id,
+                        'order_id' => $item->order_id,
+                    ])->all(),
+            ], $payload);
 
-            if ($document->document_type === 'invoice') {
-                $this->consumeInventoryForInvoice($company, $items, $actor);
-            }
+            $basePayload['document_type'] = 'quote';
 
-            if (in_array($document->source, ['repair', 'mixed'], true) && isset($payload['repair_outcome'])) {
-                $this->repairOutcomeService->closeFromBillingDocument($document, $payload);
-            }
-
-            return $document->fresh(['items.order', 'items.inventoryItem', 'customer', 'company', 'user']);
+            return $this->persistDocument($quote->company, $actor, $basePayload, $quote->order);
         });
     }
 
@@ -201,8 +197,8 @@ class BillingService
     private function applyLinkedServiceOrderStatus(Company $company, array $items, string $documentType): void
     {
         $targetStatus = $documentType === 'quote'
-            ? OrderStatus::QUOTE
-            : OrderStatus::READY;
+            ? OrderStatus::QUOTED
+            : OrderStatus::COMPLETED;
 
         foreach ($items as $item) {
             if ($item['item_kind'] !== 'service' || empty($item['order_id'])) {
@@ -217,8 +213,177 @@ class BillingService
                 continue;
             }
 
-            $order->update(['status' => $targetStatus]);
+            if ($this->orderStateMachine->canTransition($order->status, $targetStatus)) {
+                $this->orderStateMachine->transition($order, $targetStatus);
+            }
         }
+    }
+
+    private function persistDocument(
+        Company $company,
+        User $actor,
+        array $payload,
+        ?Order $forcedOrder = null
+    ): BillingDocument {
+        $vatRate = ((float) $company->vat_percentage) / 100;
+        $taxMode = $payload['tax_mode'];
+
+        [$subtotal, $vatAmount, $total, $items] = $this->buildItemsAndTotals($company, $vatRate, $taxMode, $payload['items']);
+
+        $quoteOrder = $forcedOrder ?? $this->resolveQuoteOrder($company, $payload['document_type'], $items);
+        $version = $this->resolveDocumentVersion($quoteOrder, $payload['document_type']);
+        $status = $this->resolveDocumentStatus($payload['document_type'], $payload);
+        $isActive = $this->resolveDocumentActiveFlag($payload['document_type'], $status);
+
+        if ($payload['customer_mode'] === 'walk_in') {
+            $quoteOrder = null;
+        }
+
+        $document = BillingDocument::query()->create([
+            'company_id' => $company->id,
+            'user_id' => $actor->id,
+            'customer_id' => $payload['customer_mode'] === 'registered' ? $payload['customer_id'] : null,
+            'order_id' => $quoteOrder?->id,
+            'document_number' => $this->nextDocumentNumber($company),
+            'document_type' => $payload['document_type'],
+            'version' => $version,
+            'status' => $status,
+            'is_active' => $isActive,
+            'customer_mode' => $payload['customer_mode'],
+            'walk_in_name' => $payload['customer_mode'] === 'walk_in'
+                ? ($payload['walk_in_name'] ?: 'Cliente de Mostrador')
+                : null,
+            'source' => $payload['source'],
+            'tax_mode' => $taxMode,
+            'vat_percentage' => $company->vat_percentage,
+            'subtotal' => $subtotal,
+            'vat_amount' => $vatAmount,
+            'total' => $total,
+            'notes' => $payload['notes'] ?? null,
+            'issued_at' => now(),
+        ]);
+
+        if ($payload['customer_mode'] === 'walk_in') {
+            $items = $this->attachWalkInServiceOrders($company, $actor, $document, $items);
+        } else {
+            $this->applyLinkedServiceOrderStatus($company, $items, $payload['document_type']);
+        }
+
+        foreach ($items as $item) {
+            BillingDocumentItem::query()->create([
+                'billing_document_id' => $document->id,
+                ...$item,
+            ]);
+        }
+
+        if ($document->document_type === 'quote' && $quoteOrder) {
+            $this->deactivateOtherQuoteVersions($quoteOrder, $document);
+        }
+
+        if ($document->document_type === 'invoice') {
+            $this->consumeInventoryForInvoice($company, $items, $actor);
+        }
+
+        if (in_array($document->source, ['repair', 'mixed'], true) && $document->document_type === 'invoice' && isset($payload['repair_outcome'])) {
+            $repairOrder = $this->resolveSingleRepairOrder($document);
+
+            if ($repairOrder) {
+                $this->orderWorkflowValidator->ensureCanRepair($repairOrder);
+            }
+
+            $this->repairOutcomeService->closeFromBillingDocument($document, $payload);
+        }
+
+        return $document->fresh(['items.order', 'items.inventoryItem', 'customer', 'company', 'user', 'order']);
+    }
+
+    private function resolveQuoteOrder(Company $company, string $documentType, array $items): ?Order
+    {
+        if ($documentType !== 'quote') {
+            return null;
+        }
+
+        $orderIds = collect($items)
+            ->filter(fn (array $item): bool => $item['item_kind'] === 'service' && ! empty($item['order_id']))
+            ->pluck('order_id')
+            ->unique()
+            ->values();
+
+        if ($orderIds->count() !== 1) {
+            throw QuoteVersionException::quoteRequiresSingleOrder();
+        }
+
+        $order = Order::query()
+            ->where('company_id', $company->id)
+            ->find($orderIds->first());
+
+        if (! $order) {
+            throw QuoteVersionException::quoteOrderMismatch();
+        }
+
+        return $order;
+    }
+
+    private function resolveDocumentVersion(?Order $order, string $documentType): int
+    {
+        if ($documentType !== 'quote' || ! $order) {
+            return 1;
+        }
+
+        return (int) BillingDocument::query()
+            ->where('order_id', $order->id)
+            ->where('document_type', 'quote')
+            ->max('version') + 1;
+    }
+
+    private function resolveDocumentStatus(string $documentType, array $payload): string
+    {
+        if ($documentType === 'quote') {
+            return in_array($payload['status'] ?? 'draft', ['draft', 'sent'], true)
+                ? (string) ($payload['status'] ?? 'draft')
+                : 'draft';
+        }
+
+        return 'approved';
+    }
+
+    private function resolveDocumentActiveFlag(string $documentType, string $status): bool
+    {
+        if ($documentType !== 'quote') {
+            return false;
+        }
+
+        return in_array($status, ['draft', 'sent', 'approved'], true);
+    }
+
+    private function deactivateOtherQuoteVersions(Order $order, BillingDocument $currentDocument): void
+    {
+        BillingDocument::query()
+            ->where('order_id', $order->id)
+            ->where('document_type', 'quote')
+            ->whereKeyNot($currentDocument->id)
+            ->update(['is_active' => false]);
+    }
+
+    private function resolveSingleRepairOrder(BillingDocument $document): ?Order
+    {
+        $document->loadMissing('items.order');
+
+        $orders = $document->items
+            ->filter(fn (BillingDocumentItem $item): bool => $item->item_kind === 'service' && $item->order !== null)
+            ->pluck('order')
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        if ($orders->count() !== 1) {
+            return null;
+        }
+
+        /** @var Order $order */
+        $order = $orders->first();
+
+        return $order;
     }
 
     private function consumeInventoryForInvoice(Company $company, array $items, User $actor): void

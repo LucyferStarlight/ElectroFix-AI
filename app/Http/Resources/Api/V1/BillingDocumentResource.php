@@ -13,8 +13,12 @@ class BillingDocumentResource extends JsonResource
         return [
             'id' => $this->id,
             'company_id' => $this->company_id,
+            'order_id' => $this->order_id,
             'document_number' => $this->document_number,
             'document_type' => $this->document_type,
+            'version' => $this->version,
+            'status' => $this->status,
+            'is_active' => (bool) $this->is_active,
             'source' => $this->source,
             'customer_mode' => $this->customer_mode,
             'customer_display_name' => $this->customerDisplayName(),
@@ -41,4 +45,3 @@ class BillingDocumentResource extends JsonResource
         ];
     }
 }
-

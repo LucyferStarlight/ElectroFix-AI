@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Billing\StripeController;
 use App\Http\Controllers\Api\V1\AuthTokenController;
 use App\Http\Controllers\Api\V1\BillingDocumentApiController;
 use App\Http\Controllers\Api\V1\CustomerApiController;
@@ -9,17 +10,14 @@ use App\Http\Controllers\Api\V1\InventoryItemApiController;
 use App\Http\Controllers\Api\V1\OrderApiController;
 use App\Http\Controllers\Api\V1\ProfileApiController;
 use App\Http\Controllers\Api\V1\RepairOutcomeApiController;
-use App\Http\Controllers\Api\Billing\StripeController;
 use App\Http\Controllers\Api\V1\SubscriptionApiController;
 use App\Support\ApiAbility;
 use Illuminate\Support\Facades\Route;
 
-
 Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook'])
     ->withoutMiddleware('throttle:api');
 
-Route::middleware(['auth:sanctum'])->group(function (): void {
-});
+Route::middleware(['auth:sanctum'])->group(function (): void {});
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/auth/tokens', [AuthTokenController::class, 'store']);
@@ -36,6 +34,8 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/orders', [OrderApiController::class, 'index'])->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::post('/orders', [OrderApiController::class, 'store'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
         Route::patch('/orders/{order}/status', [OrderApiController::class, 'updateStatus'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
+        Route::patch('/orders/{order}/approve', [OrderApiController::class, 'approve'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
+        Route::patch('/orders/{order}/reject', [OrderApiController::class, 'reject'])->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);
         Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])
             ->middleware(['token_ability:'.ApiAbility::AI_USE, 'throttle:ai-diagnostics']);
         Route::get('/orders/{order}/diagnostics/latest', [OrderApiController::class, 'showLatestDiagnostic'])

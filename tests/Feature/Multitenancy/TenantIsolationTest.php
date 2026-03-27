@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Multitenancy;
 
-use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\InventoryItem;
@@ -14,8 +13,8 @@ use Tests\Traits\CreatesCompanyWithRoles;
 
 class TenantIsolationTest extends TestCase
 {
-    use RefreshDatabase;
     use CreatesCompanyWithRoles;
+    use RefreshDatabase;
 
     public function test_admin_cannot_view_other_company_customers(): void
     {
@@ -51,7 +50,7 @@ class TenantIsolationTest extends TestCase
 
         $response = $this->actingAs($adminA)
             ->patch(route('worker.orders.status', $orderB), [
-                'status' => 'ready',
+                'status' => 'completed',
             ]);
 
         $response->assertStatus(403);

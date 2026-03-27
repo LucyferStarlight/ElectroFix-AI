@@ -9,9 +9,12 @@ use App\Models\OrderRepairOutcome;
 use App\Models\User;
 use App\Services\Exceptions\OutcomeNotFoundException;
 use App\Services\Exceptions\RepairOutcomeAlreadyClosedException;
+use App\Support\OrderStatus;
 
 class RepairOutcomeService
 {
+    public function __construct(private readonly OrderStateMachine $orderStateMachine) {}
+
     public function closeFromBillingDocument(BillingDocument $doc, array $data): OrderRepairOutcome
     {
         $doc->loadMissing(['company.subscription', 'items.order.latestDiagnostic']);
@@ -68,6 +71,10 @@ class RepairOutcomeService
             $outcome->update([
                 'delivered_at' => now(),
             ]);
+        }
+
+        if ($this->orderStateMachine->canTransition($order->status, OrderStatus::DELIVERED)) {
+            $this->orderStateMachine->transition($order, OrderStatus::DELIVERED);
         }
 
         return $outcome->fresh();

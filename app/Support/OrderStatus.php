@@ -2,40 +2,67 @@
 
 namespace App\Support;
 
+use App\Enums\OrderStatus as OrderStatusEnum;
+
 class OrderStatus
 {
-    public const RECEIVED = 'received';
-    public const DIAGNOSTIC = 'diagnostic';
-    public const REPAIRING = 'repairing';
-    public const QUOTE = 'quote';
-    public const READY = 'ready';
-    public const DELIVERED = 'delivered';
-    public const NOT_REPAIRED = 'not_repaired';
+    public const CREATED = OrderStatusEnum::CREATED->value;
+
+    public const DIAGNOSING = OrderStatusEnum::DIAGNOSING->value;
+
+    public const QUOTED = OrderStatusEnum::QUOTED->value;
+
+    public const APPROVED = OrderStatusEnum::APPROVED->value;
+
+    public const IN_REPAIR = OrderStatusEnum::IN_REPAIR->value;
+
+    public const COMPLETED = OrderStatusEnum::COMPLETED->value;
+
+    public const DELIVERED = OrderStatusEnum::DELIVERED->value;
+
+    public const CLOSED = OrderStatusEnum::CLOSED->value;
+
+    public const CANCELED = OrderStatusEnum::CANCELED->value;
+
+    public const RECEIVED = self::CREATED;
+
+    public const DIAGNOSTIC = self::DIAGNOSING;
+
+    public const REPAIRING = self::IN_REPAIR;
+
+    public const QUOTE = self::QUOTED;
+
+    public const READY = self::COMPLETED;
+
+    public const NOT_REPAIRED = self::CANCELED;
 
     public static function all(): array
     {
-        return [
-            self::RECEIVED,
-            self::DIAGNOSTIC,
-            self::REPAIRING,
-            self::QUOTE,
-            self::READY,
-            self::DELIVERED,
-            self::NOT_REPAIRED,
-        ];
+        return OrderStatusEnum::values();
+    }
+
+    public static function acceptedValues(): array
+    {
+        return OrderStatusEnum::acceptedValues();
     }
 
     public static function label(string $status): string
     {
-        return match ($status) {
-            self::RECEIVED => 'Recibido',
-            self::DIAGNOSTIC => 'Diagnóstico',
-            self::REPAIRING => 'Reparación',
-            self::QUOTE => 'Cotización',
-            self::READY => 'Listo',
-            self::DELIVERED => 'Entregado',
-            self::NOT_REPAIRED => 'No reparado',
-            default => ucfirst($status),
+        return OrderStatusEnum::tryFromInput($status)?->label() ?? ucfirst($status);
+    }
+
+    public static function normalize(string $status): string
+    {
+        return OrderStatusEnum::fromInput($status)->value;
+    }
+
+    public static function badgeClass(string $status): string
+    {
+        return match (self::normalize($status)) {
+            self::COMPLETED, self::DELIVERED, self::CLOSED => 'badge-ui-success',
+            self::QUOTED, self::APPROVED => 'badge-ui-warning',
+            self::CANCELED => 'badge-ui-danger',
+            default => 'badge-ui-info',
         };
     }
 }

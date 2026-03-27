@@ -41,10 +41,12 @@ class StoreBillingDocumentRequest extends FormRequest
 
     public function rules(): array
     {
-        $requiresRepairOutcome = fn (): bool => in_array($this->input('source'), ['repair', 'mixed'], true);
+        $requiresRepairOutcome = fn (): bool => in_array($this->input('source'), ['repair', 'mixed'], true)
+            && $this->input('document_type') === 'invoice';
 
         return [
             'document_type' => ['required', 'in:quote,invoice'],
+            'status' => ['nullable', Rule::in(['draft', 'sent'])],
             'source' => ['required', 'in:repair,sale,mixed'],
             'customer_mode' => ['required', 'in:registered,walk_in'],
             'customer_id' => ['nullable', 'integer', 'exists:customers,id', 'required_if:customer_mode,registered'],

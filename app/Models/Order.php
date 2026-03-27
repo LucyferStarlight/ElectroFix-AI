@@ -2,11 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\OrderPaymentStatus;
+use App\Enums\OrderStatus;
+use App\Services\Exceptions\OrderApprovalException;
+use App\Services\Exceptions\OrderPaymentException;
+use App\Services\OrderStateMachine;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 class Order extends Model
 {
@@ -20,6 +27,13 @@ class Order extends Model
         'technician_profile_id',
         'symptoms',
         'status',
+        'payment_status',
+        'total_paid',
+        'approved_at',
+        'approved_by',
+        'approval_channel',
+        'rejected_at',
+        'rejection_reason',
         'estimated_cost',
         'ai_potential_causes',
         'ai_estimated_time',
@@ -41,6 +55,9 @@ class Order extends Model
     {
         return [
             'estimated_cost' => 'decimal:2',
+            'total_paid' => 'decimal:2',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
             'ai_potential_causes' => 'array',
             'ai_suggested_parts' => 'array',
             'ai_diagnosed_at' => 'datetime',
@@ -50,6 +67,123 @@ class Order extends Model
             'ai_cost_replacement_parts' => 'decimal:2',
             'ai_cost_replacement_total' => 'decimal:2',
         ];
+    }
+
+    protected function status(): Attribute
+    {
+        return Attribute::make(
+            get: static fn (?string $value): ?string => $value === null
+                ? null
+                : OrderStatus::fromInput($value)->value,
+            set: static fn (OrderStatus|string|null $value): ?string => $value === null
+                ? null
+                : OrderStatus::fromInput($value)->value
+        );
+    }
+
+    public function statusEnum(): OrderStatus
+    {
+        return OrderStatus::fromInput((string) $this->status);
+    }
+
+    public function canTransitionTo(OrderStatus|string $status): bool
+    {
+        return app(OrderStateMachine::class)->canTransition($this->statusEnum(), $status);
+    }
+
+    public function availableTransitions(): array
+    {
+        return app(OrderStateMachine::class)->availableTransitions($this->statusEnum());
+    }
+
+    public function approve(?string $approvedBy = 'system', string $approvalChannel = 'system'): self
+    {
+        $approvedBy = $this->normalizeApprovedBy($approvedBy);
+        $approvalChannel = $this->normalizeApprovalChannel($approvalChannel);
+
+        DB::transaction(function () use ($approvedBy, $approvalChannel): void {
+            $this->forceFill([
+                'approved_at' => $this->approved_at ?? now(),
+                'approved_by' => $approvedBy,
+                'approval_channel' => $approvalChannel,
+                'rejected_at' => null,
+                'rejection_reason' => null,
+            ]);
+
+            $this->save();
+
+            app(OrderStateMachine::class)->transition($this, OrderStatus::APPROVED);
+        });
+
+        return $this->refresh();
+    }
+
+    public function reject(string $reason): self
+    {
+        $reason = trim($reason);
+
+        if ($reason === '') {
+            throw OrderApprovalException::rejectionReasonRequired();
+        }
+
+        DB::transaction(function () use ($reason): void {
+            $this->forceFill([
+                'rejected_at' => now(),
+                'rejection_reason' => $reason,
+                'approved_at' => null,
+                'approved_by' => null,
+                'approval_channel' => null,
+            ]);
+
+            $this->save();
+
+            app(OrderStateMachine::class)->transition($this, OrderStatus::CANCELED);
+        });
+
+        return $this->refresh();
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->approved_at !== null
+            && filled($this->approval_channel)
+            && $this->rejected_at === null;
+    }
+
+    public static function allowedApprovalActors(): array
+    {
+        return ['customer', 'system'];
+    }
+
+    public static function allowedApprovalChannels(): array
+    {
+        return ['whatsapp', 'system', 'verbal', 'phone', 'email', 'other'];
+    }
+
+    private function normalizeApprovedBy(?string $approvedBy): ?string
+    {
+        if ($approvedBy === null) {
+            return null;
+        }
+
+        $approvedBy = strtolower(trim($approvedBy));
+
+        if (! in_array($approvedBy, self::allowedApprovalActors(), true)) {
+            throw OrderApprovalException::invalidApprovalActor($approvedBy);
+        }
+
+        return $approvedBy;
+    }
+
+    private function normalizeApprovalChannel(string $approvalChannel): string
+    {
+        $approvalChannel = strtolower(trim($approvalChannel));
+
+        if (! in_array($approvalChannel, self::allowedApprovalChannels(), true)) {
+            throw OrderApprovalException::invalidApprovalChannel($approvalChannel);
+        }
+
+        return $approvalChannel;
     }
 
     public function company(): BelongsTo
@@ -70,6 +204,16 @@ class Order extends Model
     public function billingItems(): HasMany
     {
         return $this->hasMany(BillingDocumentItem::class);
+    }
+
+    public function billingDocuments(): HasMany
+    {
+        return $this->hasMany(BillingDocument::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(OrderPayment::class);
     }
 
     public function aiUsages(): HasMany
@@ -105,5 +249,121 @@ class Order extends Model
     public function repairOutcome(): HasOne
     {
         return $this->hasOne(OrderRepairOutcome::class);
+    }
+
+    public function registerPayment(float $amount, array $context = []): OrderPayment
+    {
+        if ($amount <= 0) {
+            throw OrderPaymentException::amountMustBePositive();
+        }
+
+        return DB::transaction(function () use ($amount, $context): OrderPayment {
+            $payment = $this->payments()->create([
+                'billing_document_id' => $context['billing_document_id'] ?? null,
+                'direction' => 'payment',
+                'amount' => round($amount, 2),
+                'currency' => strtolower((string) ($context['currency'] ?? 'mxn')),
+                'source' => (string) ($context['source'] ?? 'manual'),
+                'stripe_payment_intent_id' => $context['stripe_payment_intent_id'] ?? null,
+                'stripe_checkout_session_id' => $context['stripe_checkout_session_id'] ?? null,
+                'stripe_charge_id' => $context['stripe_charge_id'] ?? null,
+                'stripe_refund_id' => null,
+                'status' => (string) ($context['status'] ?? 'succeeded'),
+                'metadata' => $context['metadata'] ?? null,
+                'processed_at' => $context['processed_at'] ?? now(),
+            ]);
+
+            $this->refreshPaymentTotals();
+
+            return $payment->fresh();
+        });
+    }
+
+    public function registerRefund(float $amount, array $context = []): OrderPayment
+    {
+        if ($amount <= 0) {
+            throw OrderPaymentException::amountMustBePositive();
+        }
+
+        if ($amount > (float) $this->total_paid) {
+            throw OrderPaymentException::refundExceedsPaidAmount();
+        }
+
+        return DB::transaction(function () use ($amount, $context): OrderPayment {
+            $refund = $this->payments()->create([
+                'billing_document_id' => $context['billing_document_id'] ?? null,
+                'direction' => 'refund',
+                'amount' => round($amount, 2),
+                'currency' => strtolower((string) ($context['currency'] ?? 'mxn')),
+                'source' => (string) ($context['source'] ?? 'manual'),
+                'stripe_payment_intent_id' => $context['stripe_payment_intent_id'] ?? null,
+                'stripe_checkout_session_id' => $context['stripe_checkout_session_id'] ?? null,
+                'stripe_charge_id' => $context['stripe_charge_id'] ?? null,
+                'stripe_refund_id' => $context['stripe_refund_id'] ?? null,
+                'status' => (string) ($context['status'] ?? 'refunded'),
+                'metadata' => $context['metadata'] ?? null,
+                'processed_at' => $context['processed_at'] ?? now(),
+            ]);
+
+            $this->refreshPaymentTotals();
+
+            return $refund->fresh();
+        });
+    }
+
+    public function isFullyPaid(): bool
+    {
+        return (float) $this->total_paid >= $this->paymentDueAmount()
+            && $this->paymentDueAmount() > 0;
+    }
+
+    public function paymentDueAmount(): float
+    {
+        $invoicedAmount = (float) $this->billingItems()->sum('line_total');
+
+        if ($invoicedAmount > 0) {
+            return round($invoicedAmount, 2);
+        }
+
+        $activeQuoteAmount = (float) $this->billingDocuments()
+            ->where('document_type', 'quote')
+            ->where('is_active', true)
+            ->value('total');
+
+        if ($activeQuoteAmount > 0) {
+            return round($activeQuoteAmount, 2);
+        }
+
+        return round((float) $this->estimated_cost, 2);
+    }
+
+    public function outstandingBalance(): float
+    {
+        return max(0, round($this->paymentDueAmount() - (float) $this->total_paid, 2));
+    }
+
+    public function refreshPaymentTotals(): self
+    {
+        $payments = (float) $this->payments()->where('direction', 'payment')->sum('amount');
+        $refunds = (float) $this->payments()->where('direction', 'refund')->sum('amount');
+        $netPaid = round(max(0, $payments - $refunds), 2);
+
+        $hasPayments = $payments > 0;
+        $hasRefunds = $refunds > 0;
+        $dueAmount = $this->paymentDueAmount();
+
+        $paymentStatus = match (true) {
+            $hasPayments && $netPaid <= 0 && $hasRefunds => OrderPaymentStatus::REFUNDED->value,
+            $dueAmount > 0 && $netPaid >= $dueAmount => OrderPaymentStatus::PAID->value,
+            $netPaid > 0 => OrderPaymentStatus::PARTIAL->value,
+            default => OrderPaymentStatus::PENDING->value,
+        };
+
+        $this->forceFill([
+            'total_paid' => $netPaid,
+            'payment_status' => $paymentStatus,
+        ])->save();
+
+        return $this->refresh();
     }
 }

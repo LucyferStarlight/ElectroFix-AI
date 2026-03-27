@@ -12,9 +12,9 @@ use App\Http\Controllers\Developer\CompanyInsightsController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\SubscriptionController as PublicSubscriptionController;
 use App\Http\Controllers\SupportController;
+use App\Http\Controllers\Worker\BillingController as WorkerBillingController;
 use App\Http\Controllers\Worker\CustomerController;
 use App\Http\Controllers\Worker\EquipmentController;
-use App\Http\Controllers\Worker\BillingController as WorkerBillingController;
 use App\Http\Controllers\Worker\InventoryController;
 use App\Http\Controllers\Worker\OrderController;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +47,8 @@ Route::middleware(['auth', 'must_change_password'])->group(function (): void {
         Route::get('/worker/orders', [OrderController::class, 'index'])->name('worker.orders');
         Route::post('/worker/orders', [OrderController::class, 'store'])->name('worker.orders.store');
         Route::patch('/worker/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('worker.orders.status');
+        Route::patch('/worker/orders/{order}/approve', [OrderController::class, 'approve'])->name('worker.orders.approve');
+        Route::patch('/worker/orders/{order}/reject', [OrderController::class, 'reject'])->name('worker.orders.reject');
         Route::post('/worker/orders/{order}/deliver', [OrderController::class, 'deliver'])->name('worker.orders.deliver');
         Route::post('/worker/orders/diagnose', [OrderController::class, 'diagnose'])->name('worker.orders.diagnose');
 

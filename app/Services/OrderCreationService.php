@@ -15,8 +15,7 @@ class OrderCreationService
     public function __construct(
         private readonly AiDiagnosticService $aiDiagnosticService,
         private readonly TechnicianAssignmentService $technicianAssignmentService
-    ) {
-    }
+    ) {}
 
     public function create(User $actor, array $payload): array
     {
@@ -42,7 +41,7 @@ class OrderCreationService
                 'technician_profile_id' => $technician->id,
                 'technician' => $technician->display_name,
                 'symptoms' => $payload['symptoms'] ?? null,
-                'status' => $payload['status'] ?? OrderStatus::RECEIVED,
+                'status' => $payload['status'] ?? OrderStatus::CREATED,
                 'estimated_cost' => $payload['estimated_cost'] ?? 0,
             ]);
 

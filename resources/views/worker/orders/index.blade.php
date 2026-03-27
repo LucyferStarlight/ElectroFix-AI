@@ -3,7 +3,6 @@
 @section('title', 'Órdenes | ElectroFix-AI')
 
 @section('content')
-@php($statusLabels = ['received' => 'Recibido', 'diagnostic' => 'Diagnóstico', 'repairing' => 'Reparación', 'quote' => 'Cotización', 'ready' => 'Listo', 'delivered' => 'Entregado', 'not_repaired' => 'No reparado'])
 @php($currentUser = auth()->user())
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
@@ -38,7 +37,7 @@
                     <div class="card-body d-flex flex-column">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <span class="badge badge-ui badge-ui-info">#{{ str_pad((string) $order->id, 6, '0', STR_PAD_LEFT) }}</span>
-                            <span class="badge badge-ui {{ in_array($order->status, ['ready','delivered'], true) ? 'badge-ui-success' : (in_array($order->status, ['quote','not_repaired'], true) ? 'badge-ui-warning' : 'badge-ui-info') }}">{{ $statusLabels[$order->status] ?? $order->status }}</span>
+                            <span class="badge badge-ui {{ \App\Support\OrderStatus::badgeClass((string) $order->status) }}">{{ \App\Support\OrderStatus::label((string) $order->status) }}</span>
                         </div>
                         <h2 class="h5 fw-bold">{{ $order->equipment->brand }} {{ $order->equipment->type }}</h2>
                         <p class="text-muted mb-2">{{ $order->equipment->model ?: 'Modelo no definido' }}</p>
@@ -70,7 +69,7 @@
                                                     @csrf
                                                     @method('PATCH')
                                                     <input type="hidden" name="status" value="{{ $status }}">
-                                                    <button class="btn btn-ui btn-sm {{ $order->status === $status ? 'btn-primary-ui' : 'btn-outline-ui' }}" type="submit">{{ $statusLabels[$status] ?? $status }}</button>
+                                                    <button class="btn btn-ui btn-sm {{ $order->status === $status ? 'btn-primary-ui' : 'btn-outline-ui' }}" type="submit">{{ \App\Support\OrderStatus::label($status) }}</button>
                                                 </form>
                                             @endforeach
                                         </div>

@@ -2,12 +2,12 @@
 
 namespace App\Services;
 
+use App\Mail\CompanyWelcomeMail;
 use App\Models\Company;
 use App\Models\PlanPrice;
 use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Mail\CompanyWelcomeMail;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,9 +18,9 @@ class StripeWebhookService
     // Cashier gestiona el modelo de suscripciones; este servicio procesa eventos del webhook de Stripe.
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
-        private readonly StripeSignupService $stripeSignupService
-    ) {
-    }
+        private readonly StripeSignupService $stripeSignupService,
+        private readonly OrderPaymentService $orderPaymentService
+    ) {}
 
     public function handle(array $eventPayload): void
     {
@@ -60,6 +60,8 @@ class StripeWebhookService
             DB::transaction(function () use ($eventPayload, $eventType): void {
                 match ($eventType) {
                     'checkout.session.completed' => $this->onCheckoutCompleted($eventPayload),
+                    'payment_intent.succeeded' => $this->onOrderPaymentIntentSucceeded($eventPayload),
+                    'charge.refunded' => $this->onOrderChargeRefunded($eventPayload),
                     'customer.subscription.created',
                     'customer.subscription.updated' => $this->onSubscriptionUpsert($eventPayload),
                     'customer.subscription.deleted' => $this->onSubscriptionDeleted($eventPayload),
@@ -72,6 +74,8 @@ class StripeWebhookService
 
             $trackedEvents = [
                 'checkout.session.completed',
+                'payment_intent.succeeded',
+                'charge.refunded',
                 'customer.subscription.created',
                 'customer.subscription.updated',
                 'customer.subscription.deleted',
@@ -104,6 +108,12 @@ class StripeWebhookService
 
     private function onCheckoutCompleted(array $payload): void
     {
+        if ($this->isOrderCheckoutEvent($payload)) {
+            $this->orderPaymentService->syncStripeCheckoutCompleted($payload);
+
+            return;
+        }
+
         $customerId = (string) Arr::get($payload, 'data.object.customer');
         $subscriptionId = (string) Arr::get($payload, 'data.object.subscription');
         $plan = (string) Arr::get($payload, 'data.object.metadata.plan');
@@ -206,6 +216,16 @@ class StripeWebhookService
             'company_id' => $company->id,
             'stripe_subscription_id' => $subscriptionId,
         ]);
+    }
+
+    private function onOrderPaymentIntentSucceeded(array $payload): void
+    {
+        $this->orderPaymentService->syncStripePaymentIntentSucceeded($payload);
+    }
+
+    private function onOrderChargeRefunded(array $payload): void
+    {
+        $this->orderPaymentService->syncStripeChargeRefunded($payload);
     }
 
     private function onInvoicePaid(array $payload): void
@@ -363,5 +383,11 @@ class StripeWebhookService
     public function syncCompanyByStripeCustomerId(string $stripeCustomerId): ?Company
     {
         return Company::query()->where('stripe_id', $stripeCustomerId)->first();
+    }
+
+    private function isOrderCheckoutEvent(array $payload): bool
+    {
+        return (int) Arr::get($payload, 'data.object.metadata.order_id', 0) > 0
+            && (string) Arr::get($payload, 'data.object.mode') === 'payment';
     }
 }

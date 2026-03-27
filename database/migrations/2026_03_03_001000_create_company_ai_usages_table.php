@@ -19,7 +19,7 @@ return new class extends Migration
             $table->unsignedInteger('prompt_tokens_estimated')->default(0);
             $table->unsignedInteger('response_tokens_estimated')->default(0);
             $table->unsignedInteger('total_tokens_estimated')->default(0);
-            $table->enum('status', ['success', 'blocked_plan', 'blocked_quota', 'blocked_tokens', 'error']);
+            $table->enum('status', ['success', 'blocked_plan', 'blocked_quota', 'blocked_tokens', 'provider_unavailable', 'error']);
             $table->string('error_message')->nullable();
             $table->timestamps();
 
@@ -34,4 +34,3 @@ return new class extends Migration
         Schema::dropIfExists('company_ai_usages');
     }
 };
-

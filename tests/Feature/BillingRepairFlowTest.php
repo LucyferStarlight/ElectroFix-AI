@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Support\ApiAbility;
+use App\Support\OrderStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -51,7 +52,7 @@ class BillingRepairFlowTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
-            'status' => 'received',
+            'status' => OrderStatus::CREATED,
             'estimated_cost' => 1500,
         ]);
 
@@ -82,7 +83,7 @@ class BillingRepairFlowTest extends TestCase
         $this->assertNotNull($document);
 
         $order->refresh();
-        $this->assertSame('ready', $order->status);
+        $this->assertSame(OrderStatus::COMPLETED, $order->status);
 
         $this->actingAs($user);
 

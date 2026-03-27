@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrderStatus;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Equipment;
@@ -20,7 +21,9 @@ class OrderFactory extends Factory
             'equipment_id' => Equipment::factory(),
             'technician' => fake()->name(),
             'symptoms' => 'No enciende',
-            'status' => 'received',
+            'status' => OrderStatus::CREATED->value,
+            'payment_status' => 'pending',
+            'total_paid' => 0,
             'estimated_cost' => 1200,
         ];
     }
