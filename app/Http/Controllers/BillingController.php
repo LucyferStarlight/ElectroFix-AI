@@ -16,6 +16,12 @@ class BillingController extends Controller
 
     public function checkout(Request $request)
     {
+        if (! $this->stripeIsConfigured()) {
+            return back()->withErrors([
+                'plan' => 'En este momento no es posible procesar el pago. Intenta nuevamente en unos minutos o contacta a soporte.',
+            ]);
+        }
+
         $data = $request->validate([
             'company_id' => ['prohibited'],
             'plan' => ['required', Rule::in(['starter', 'pro', 'enterprise'])],
@@ -48,6 +54,12 @@ class BillingController extends Controller
 
     public function portal(Request $request): RedirectResponse
     {
+        if (! $this->stripeIsConfigured()) {
+            return back()->withErrors([
+                'plan' => 'En este momento no es posible acceder al portal de facturacion. Intenta nuevamente en unos minutos o contacta a soporte.',
+            ]);
+        }
+
         $request->validate([
             'company_id' => ['prohibited'],
         ]);
@@ -56,5 +68,11 @@ class BillingController extends Controller
         abort_if(! $company, 404, 'Empresa no encontrada para este usuario.');
 
         return $this->stripeSubscriptionService->portal($company);
+    }
+
+    private function stripeIsConfigured(): bool
+    {
+        return trim((string) config('services.stripe.key')) !== ''
+            && trim((string) config('services.stripe.secret')) !== '';
     }
 }

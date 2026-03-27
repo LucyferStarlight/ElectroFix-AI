@@ -77,7 +77,7 @@
                                                             <li>{{ $feature }}</li>
                                                         @endforeach
                                                         @if($plan['ai_enabled'])
-                                                            <li class="text-success">IA de diagnóstico ARIS incluida</li>
+                                                            <li class="text-success">IA diagnóstica con Groq incluida</li>
                                                         @endif
                                                     </ul>
                                                 </div>

@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\TechnicianProfile;
 use App\Services\AiPlanPolicyService;
 use App\Services\AiUsageService;
+use App\Services\OrderCustomerNotificationService;
 use App\Services\OrderCreationService;
 use App\Services\RepairOutcomeService;
 use App\Services\Exceptions\OutcomeNotFoundException;
@@ -87,10 +88,19 @@ class OrderController extends Controller
         ]);
     }
 
-    public function store(StoreOrderRequest $request, OrderCreationService $orderCreationService): RedirectResponse
+    public function store(
+        StoreOrderRequest $request,
+        OrderCreationService $orderCreationService,
+        OrderCustomerNotificationService $orderCustomerNotificationService
+    ): RedirectResponse
     {
         $result = $orderCreationService->create($request->user(), $request->validated());
         $warning = $result['ai_warning'] ?? null;
+        $order = $result['order'] ?? null;
+
+        if ($order instanceof Order) {
+            $orderCustomerNotificationService->sendCreated($order);
+        }
 
         $response = back()->with('success', 'Orden creada exitosamente.');
         if ($warning) {
@@ -100,15 +110,31 @@ class OrderController extends Controller
         return $response;
     }
 
-    public function updateStatus(UpdateOrderStatusRequest $request, Order $order): RedirectResponse
+    public function updateStatus(
+        UpdateOrderStatusRequest $request,
+        Order $order,
+        OrderCustomerNotificationService $orderCustomerNotificationService
+    ): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
-        $order->update(['status' => $request->validated('status')]);
+        $previousStatus = (string) $order->status;
+        $newStatus = (string) $request->validated('status');
+
+        $order->update(['status' => $newStatus]);
+
+        if ($previousStatus !== $newStatus) {
+            $orderCustomerNotificationService->sendStatusChanged($order->fresh(), $previousStatus, $newStatus);
+        }
 
         return back()->with('success', 'Estado de orden actualizado.');
     }
 
-    public function deliver(Request $request, Order $order, RepairOutcomeService $repairOutcomeService): RedirectResponse
+    public function deliver(
+        Request $request,
+        Order $order,
+        RepairOutcomeService $repairOutcomeService,
+        OrderCustomerNotificationService $orderCustomerNotificationService
+    ): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
         $order->loadMissing('billingItems');
@@ -126,6 +152,8 @@ class OrderController extends Controller
         if (! $outcome->delivered_at) {
             abort(422, 'No se pudo registrar la entrega de la orden.');
         }
+
+        $orderCustomerNotificationService->sendDelivered($order->fresh());
 
         return back()->with('success', 'Orden marcada como entregada al cliente.');
     }

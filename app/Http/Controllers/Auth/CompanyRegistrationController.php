@@ -7,7 +7,8 @@ use App\Models\Company;
 use App\Models\TechnicianProfile;
 use App\Models\User;
 use App\Services\PlanCatalogService;
-use App\Services\StripeCheckoutService;
+use App\Services\Exceptions\StripeCheckoutException;
+use App\Services\TrialPolicyService;
 use App\Support\TechnicianStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class CompanyRegistrationController extends Controller
                 'Facturación',
                 'Gestión de clientes',
                 'Estadísticas básicas',
-                'Sin acceso a IA',
+                '10 consultas IA por mes',
             ],
             'pro' => [
                 'Hasta 100 técnicos',
@@ -35,8 +36,8 @@ class CompanyRegistrationController extends Controller
                 'Inventario completo',
                 'Facturación integrada',
                 'Estadísticas',
-                'IA de diagnóstico ARIS incluida',
-                '100 consultas IA / mes',
+                'IA diagnóstica con Groq incluida',
+                '75 consultas IA / mes',
             ],
             'enterprise' => [
                 'Técnicos ilimitados',
@@ -44,7 +45,7 @@ class CompanyRegistrationController extends Controller
                 'Inventario avanzado',
                 'Facturación completa',
                 'Reportes avanzados',
-                'IA de diagnóstico ARIS incluida',
+                'IA diagnóstica con Groq incluida',
                 '200 consultas IA / mes',
                 'Consultas adicionales disponibles',
             ],
@@ -90,7 +91,7 @@ class CompanyRegistrationController extends Controller
         return view('auth.register', compact('plans', 'selectedPlan', 'selectedPeriod'));
     }
 
-    public function store(Request $request, StripeCheckoutService $stripeCheckoutService): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
         $publicPlanKeys = $this->publicPlanKeys();
 
@@ -159,14 +160,13 @@ class CompanyRegistrationController extends Controller
         $plan = (string) $data['plan'];
         $billingPeriod = (string) $data['billing_period'];
 
-        if (! $company->stripe_id) {
-            $company->stripe_id = $stripeCheckoutService->createCustomer(
-                $company->name,
-                $data['email'],
-                $data['phone'] ?? null
-            );
-            $company->save();
+        if (! $this->stripeIsConfigured()) {
+            return back()->withErrors([
+                'plan' => 'En este momento no es posible iniciar el proceso de pago. Intenta nuevamente en unos minutos o contacta a soporte.',
+            ])->withInput();
         }
+
+        $stripeCheckoutService = app(\App\Services\StripeCheckoutService::class);
 
         $priceId = (string) data_get(config('stripe.plans', []), "{$plan}.prices.{$billingPeriod}");
         if ($priceId === '') {
@@ -174,6 +174,9 @@ class CompanyRegistrationController extends Controller
                 'plan' => 'El plan seleccionado no está configurado correctamente.',
             ])->withInput();
         }
+
+        $price = app(PlanCatalogService::class)->resolvePrice($plan, $billingPeriod, 'mxn');
+        $trialDays = app(TrialPolicyService::class)->trialDaysForPrice($price);
 
         $successUrl = url('/onboarding/success').'?session_id={CHECKOUT_SESSION_ID}';
         $cancelUrl = route('register');
@@ -186,21 +189,40 @@ class CompanyRegistrationController extends Controller
             'admin_name' => $admin->name,
             'admin_email' => $admin->email,
         ];
-
-        $session = $stripeCheckoutService->createCheckoutSession([
-            'mode' => 'subscription',
-            'line_items' => [[
-                'price' => $priceId,
-                'quantity' => 1,
-            ]],
-            'success_url' => $successUrl,
-            'cancel_url' => $cancelUrl,
-            'customer' => $company->stripe_id,
+        $subscriptionData = [
             'metadata' => $metadata,
-            'subscription_data' => [
+        ];
+        if ($trialDays > 0) {
+            $subscriptionData['trial_period_days'] = $trialDays;
+        }
+
+        try {
+            if (! $company->stripe_id) {
+                $company->stripe_id = $stripeCheckoutService->createCustomer(
+                    $company->name,
+                    $data['email'],
+                    $data['phone'] ?? null
+                );
+                $company->save();
+            }
+
+            $session = $stripeCheckoutService->createCheckoutSession([
+                'mode' => 'subscription',
+                'line_items' => [[
+                    'price' => $priceId,
+                    'quantity' => 1,
+                ]],
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
+                'customer' => $company->stripe_id,
                 'metadata' => $metadata,
-            ],
-        ]);
+                'subscription_data' => $subscriptionData,
+            ]);
+        } catch (StripeCheckoutException $exception) {
+            return back()->withErrors([
+                'plan' => $exception->getMessage(),
+            ])->withInput();
+        }
 
         $company->update([
             'pending_plan' => $plan,
@@ -250,7 +272,7 @@ class CompanyRegistrationController extends Controller
         ]);
     }
 
-    public function retryCheckout(Request $request, StripeCheckoutService $stripeCheckoutService): RedirectResponse
+    public function retryCheckout(Request $request): RedirectResponse
     {
         $company = $request->user()?->company;
         if (! $company) {
@@ -265,14 +287,16 @@ class CompanyRegistrationController extends Controller
             return back()->withErrors(['plan' => 'El plan seleccionado no está configurado correctamente.']);
         }
 
-        if (! $company->stripe_id) {
-            $company->stripe_id = $stripeCheckoutService->createCustomer(
-                $company->name,
-                $company->owner_email,
-                $company->owner_phone
-            );
-            $company->save();
+        $price = app(PlanCatalogService::class)->resolvePrice($plan, $billingPeriod, 'mxn');
+        $trialDays = app(TrialPolicyService::class)->trialDaysForPrice($price);
+
+        if (! $this->stripeIsConfigured()) {
+            return back()->withErrors([
+                'plan' => 'En este momento no es posible continuar con el pago. Intenta nuevamente en unos minutos o contacta a soporte.',
+            ]);
         }
+
+        $stripeCheckoutService = app(\App\Services\StripeCheckoutService::class);
 
         $successUrl = url('/onboarding/success').'?session_id={CHECKOUT_SESSION_ID}';
         $cancelUrl = route('register');
@@ -285,21 +309,40 @@ class CompanyRegistrationController extends Controller
             'admin_name' => $company->owner_name,
             'admin_email' => $company->owner_email,
         ];
-
-        $session = $stripeCheckoutService->createCheckoutSession([
-            'mode' => 'subscription',
-            'line_items' => [[
-                'price' => $priceId,
-                'quantity' => 1,
-            ]],
-            'success_url' => $successUrl,
-            'cancel_url' => $cancelUrl,
-            'customer' => $company->stripe_id,
+        $subscriptionData = [
             'metadata' => $metadata,
-            'subscription_data' => [
+        ];
+        if ($trialDays > 0) {
+            $subscriptionData['trial_period_days'] = $trialDays;
+        }
+
+        try {
+            if (! $company->stripe_id) {
+                $company->stripe_id = $stripeCheckoutService->createCustomer(
+                    $company->name,
+                    $company->owner_email,
+                    $company->owner_phone
+                );
+                $company->save();
+            }
+
+            $session = $stripeCheckoutService->createCheckoutSession([
+                'mode' => 'subscription',
+                'line_items' => [[
+                    'price' => $priceId,
+                    'quantity' => 1,
+                ]],
+                'success_url' => $successUrl,
+                'cancel_url' => $cancelUrl,
+                'customer' => $company->stripe_id,
                 'metadata' => $metadata,
-            ],
-        ]);
+                'subscription_data' => $subscriptionData,
+            ]);
+        } catch (StripeCheckoutException $exception) {
+            return back()->withErrors([
+                'plan' => $exception->getMessage(),
+            ]);
+        }
 
         $company->update([
             'pending_plan' => $plan,
@@ -323,5 +366,11 @@ class CompanyRegistrationController extends Controller
             'hourly_cost' => 0,
             'is_assignable' => true,
         ]);
+    }
+
+    private function stripeIsConfigured(): bool
+    {
+        return trim((string) config('services.stripe.key')) !== ''
+            && trim((string) config('services.stripe.secret')) !== '';
     }
 }

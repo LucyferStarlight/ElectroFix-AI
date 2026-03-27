@@ -32,11 +32,52 @@
                             <span class="badge badge-ui badge-ui-info text-uppercase">{{ $equipment->type }}</span>
                         </div>
                         <p class="text-muted mb-2">{{ $equipment->model ?: 'Modelo no definido' }}</p>
-                        <p class="mb-1"><strong>Propietario:</strong> {{ $equipment->customer->name }}</p>
+                        <p class="mb-1"><strong>Propietario:</strong> {{ $equipment->ownerDisplayName() }}</p>
                         <p class="mb-0"><strong>Nro Serie:</strong> {{ $equipment->serial_number ?: 'N/A' }}</p>
+                        @if($equipment->isWalkIn())
+                            <div class="mt-3">
+                                <button class="btn btn-ui btn-outline-ui btn-sm" data-bs-toggle="modal" data-bs-target="#assignCustomerModal{{ $equipment->id }}">
+                                    Vincular a cliente registrado
+                                </button>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
+            @if($equipment->isWalkIn())
+                <div class="modal fade" id="assignCustomerModal{{ $equipment->id }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content card-ui">
+                            <form method="post" action="{{ route('worker.equipments.assign-customer', $equipment) }}">
+                                @csrf
+                                @method('PATCH')
+                                <div class="modal-header border-0">
+                                    <h5 class="modal-title fw-bold">Vincular equipo a cliente registrado</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="text-muted mb-3">Usa esta opción cuando un equipo registrado como mostrador ya requiera seguimiento formal con un cliente identificado.</p>
+                                    <div>
+                                        <label class="form-label">Cliente registrado *</label>
+                                        <select class="form-select input-ui" name="customer_id" required>
+                                            <option value="">Seleccionar cliente...</option>
+                                            @foreach($customers as $customer)
+                                                @if($customer->name !== 'Cliente de Mostrador')
+                                                    <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->phone }})</option>
+                                                @endif
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="modal-footer border-0">
+                                    <button class="btn btn-ui btn-outline-ui" type="button" data-bs-dismiss="modal">Cancelar</button>
+                                    <button class="btn btn-ui btn-primary-ui" type="submit">Vincular equipo</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            @endif
         @empty
             <div class="col-12"><div class="card card-ui"><div class="card-body text-center text-muted py-5">No se encontraron equipos.</div></div></div>
         @endforelse
@@ -57,13 +98,23 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-12">
+                            <label class="form-label">Tipo de propietario *</label>
+                            <select class="form-select input-ui" name="customer_mode" id="equipmentCustomerMode" required>
+                                <option value="registered">Cliente registrado</option>
+                                <option value="walk_in">Cliente de Mostrador</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
                             <label class="form-label">Cliente (Dueño) *</label>
-                            <select class="form-select input-ui" name="customer_id" required>
+                            <select class="form-select input-ui" name="customer_id" id="equipmentCustomerSelect">
                                 <option value="">Seleccionar cliente...</option>
                                 @foreach($customers as $customer)
-                                    <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->email }})</option>
+                                    @if($customer->name !== 'Cliente de Mostrador')
+                                        <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->phone }})</option>
+                                    @endif
                                 @endforeach
                             </select>
+                            <small class="text-muted d-none" id="equipmentWalkInHint">Se registrará usando el cliente interno "Cliente de Mostrador" y podrás vincular el equipo más tarde a un cliente real.</small>
                         </div>
                         <div class="col-md-6"><label class="form-label">Tipo *</label><input class="form-control input-ui" name="type" placeholder="Lavadora" required></div>
                         <div class="col-md-6"><label class="form-label">Marca *</label><input class="form-control input-ui" name="brand" placeholder="Samsung" required></div>
@@ -79,4 +130,29 @@
         </div>
     </div>
 </div>
+
+<script>
+(() => {
+    const modeSelect = document.getElementById('equipmentCustomerMode');
+    const customerSelect = document.getElementById('equipmentCustomerSelect');
+    const walkInHint = document.getElementById('equipmentWalkInHint');
+
+    if (!modeSelect || !customerSelect || !walkInHint) {
+        return;
+    }
+
+    const syncCustomerMode = () => {
+        const walkIn = modeSelect.value === 'walk_in';
+        customerSelect.required = !walkIn;
+        customerSelect.disabled = walkIn;
+        if (walkIn) {
+            customerSelect.value = '';
+        }
+        walkInHint.classList.toggle('d-none', !walkIn);
+    };
+
+    modeSelect.addEventListener('change', syncCustomerMode);
+    syncCustomerMode();
+})();
+</script>
 @endsection

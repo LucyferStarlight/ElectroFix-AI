@@ -45,9 +45,8 @@ class OrderDiagnosticService
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
             'total_tokens' => $promptTokens + $completionTokens,
-            'provider' => $analysis['provider'] ?? 'local_stub',
-            'model' => $analysis['model'] ?? 'heuristic-v2',
+            'provider' => $analysis['provider'] ?? 'groq',
+            'model' => $analysis['model'] ?? 'llama-3.1-8b-instant',
         ]);
     }
 }
-

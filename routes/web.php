@@ -55,6 +55,7 @@ Route::middleware(['auth', 'must_change_password'])->group(function (): void {
 
         Route::get('/worker/equipments', [EquipmentController::class, 'index'])->name('worker.equipments');
         Route::post('/worker/equipments', [EquipmentController::class, 'store'])->name('worker.equipments.store');
+        Route::patch('/worker/equipments/{equipment}/assign-customer', [EquipmentController::class, 'assignCustomer'])->name('worker.equipments.assign-customer');
     });
 
     Route::middleware(['role:worker,admin,developer', 'company_active', 'subscription_active'])->group(function (): void {

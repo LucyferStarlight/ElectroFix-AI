@@ -14,6 +14,8 @@ class EquipmentResource extends JsonResource
             'id' => $this->id,
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
+            'is_walk_in' => $this->isWalkIn(),
+            'owner_name' => $this->ownerDisplayName(),
             'type' => $this->type,
             'brand' => $this->brand,
             'model' => $this->model,
@@ -26,4 +28,3 @@ class EquipmentResource extends JsonResource
         ];
     }
 }
-

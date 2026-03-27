@@ -10,7 +10,7 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - Redis (cache + colas)
 - Docker + Nginx (opcional)
 - Stripe (Checkout + webhooks)
-- IA diagnóstica (Gemini con fallback local si no hay API key)
+- IA diagnóstica con Groq (`llama-3.1-8b-instant`)
 
 ## Arquitectura funcional actual
 - Multiempresa por `company_id`.
@@ -40,17 +40,20 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - Se solicita en creación de orden (checkbox).
 - Máximo una ejecución por orden (`ai_diagnosed_at`).
 - Límite de síntomas: 600 caracteres.
-- Planes habilitados: `enterprise`, `developer_test` (según `ai_enabled` en plan).
+- Planes habilitados según configuración del plan.
 - Límites mensuales por empresa:
+  - `starter`: 10 consultas / 8,000 tokens estimados
+  - `pro`: 75 consultas / 50,000 tokens estimados
   - `enterprise`: 200 consultas / 120,000 tokens estimados
-  - `developer_test`: 500 consultas / 500,000 tokens estimados
+  - `developer_test`: 300 consultas / 500,000 tokens estimados
 - Bloqueos con mensaje funcional cuando no aplica plan/cuota/tokens.
 - Costo sugerido condicional:
   - Solo reparación (mano de obra), o
   - Reparación + reemplazo (piezas + mano de obra), según bandera IA.
 - Proveedor:
-  - `GEMINI_API_KEY` habilita Gemini.
-  - Sin API key, se usa heurística local (fallback).
+  - Se usa Groq como proveedor único de IA.
+  - Modelo activo: `llama-3.1-8b-instant`.
+  - El sistema requiere conexión a internet para procesar diagnósticos.
 
 ### Facturación
 - Flujo separado por `Venta`, `Mixto`, `Reparación`.
@@ -68,6 +71,13 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
 - `support_requests`
 
 ## Instalación local (XAMPP + MySQL)
+La configuración del repositorio ya quedó preparada para correr en local sin Redis:
+- `AI_PROVIDER=groq`
+- `SESSION_DRIVER=file`
+- `CACHE_STORE=file`
+- `QUEUE_CONNECTION=sync`
+- MySQL local por defecto (`127.0.0.1`, `root`, sin contraseña)
+
 1. Clonar repositorio.
 2. Instalar dependencias PHP:
    ```bash
@@ -75,12 +85,16 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
    ```
 3. Crear `.env`:
    ```bash
-   cp .env.example .env
+   cp .env.local.example .env
    php artisan key:generate
+   ```
+   O en una sola línea:
+   ```bash
+   composer run setup-local
    ```
 4. Configurar base de datos MySQL en `.env`:
    ```env
-   APP_URL=http://localhost/Portafolio/ElectroFix-AI/public
+   APP_URL=http://127.0.0.1:8000
    DB_CONNECTION=mysql
    DB_HOST=127.0.0.1
    DB_PORT=3306
@@ -96,6 +110,12 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
    ```bash
    php artisan serve
    ```
+### Requisitos de PHP para local
+- Extensión `dom` habilitada
+- Extensión `pdo_mysql` habilitada
+- Extensiones comunes de Laravel: `mbstring`, `openssl`, `json`, `curl`
+
+En XAMPP esto se valida en `php.ini`. Si `php artisan` muestra `Class "DOMDocument" not found`, falta habilitar `ext-dom`.
 
 ## Instalación con Docker (recomendado)
 1. Crear `.env`:
@@ -117,17 +137,6 @@ Sistema SaaS multiempresa para gestión de servicio técnico e inventario/factur
    ```
 5. Acceder a la app:
    - `http://localhost:8080`
-
-## Credenciales demo (seeders)
-- Developer:
-  - email: `developer@electrofix.ai`
-  - password: `password123`
-- Admin:
-  - email: `admin@electrofix.ai`
-  - password: `password123`
-- Worker:
-  - email: `worker@electrofix.ai`
-  - password: `password123`
 
 ## Comandos útiles
 - Limpiar cachés:

@@ -17,7 +17,7 @@ class PlanPolicyService
         ],
         'pro' => [
             'ai_enabled' => true,
-            'max_ai_requests' => 70,
+            'max_ai_requests' => 75,
             'max_ai_tokens' => 50000,
             'overage_enabled' => false,
             'overage_price_per_request' => 0,

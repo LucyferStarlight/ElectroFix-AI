@@ -7,13 +7,15 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
+use App\Services\TrialPolicyService;
 use Illuminate\Http\RedirectResponse;
 
 class StripeSubscriptionService
 {
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
-        private readonly PlanCatalogService $planCatalogService
+        private readonly PlanCatalogService $planCatalogService,
+        private readonly TrialPolicyService $trialPolicyService
     ) {
     }
 
@@ -44,8 +46,9 @@ class StripeSubscriptionService
             ],
         ];
 
-        if (! $hasHadSubscription && (int) $price->trial_days > 0) {
-            $checkoutData['subscription_data']['trial_period_days'] = (int) $price->trial_days;
+        $trialDays = $this->trialPolicyService->trialDaysForPrice($price);
+        if (! $hasHadSubscription && $trialDays > 0) {
+            $checkoutData['subscription_data']['trial_period_days'] = $trialDays;
         }
 
         return $company

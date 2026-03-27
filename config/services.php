@@ -41,17 +41,9 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
-    'gemini' => [
-        'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-1.5-flash'),
-        'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'),
-        'timeout_seconds' => (int) env('GEMINI_TIMEOUT_SECONDS', 12),
-    ],
-
     'groq' => [
         'api_key' => env('GROQ_API_KEY'),
-        'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
-        'aris_model' => env('ARIS_MODEL', 'llama-3.3-70b-versatile'),
+        'model' => env('GROQ_MODEL', 'llama-3.1-8b-instant'),
         'timeout_seconds' => (int) env('GROQ_TIMEOUT_SECONDS', 15),
     ],
 

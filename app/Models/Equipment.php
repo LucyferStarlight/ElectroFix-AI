@@ -32,6 +32,17 @@ class Equipment extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function ownerDisplayName(): string
+    {
+        return $this->customer?->name ?: 'Cliente de Mostrador';
+    }
+
+    public function isWalkIn(): bool
+    {
+        return $this->customer?->name === 'Cliente de Mostrador'
+            && $this->customer?->address === 'Mostrador';
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);

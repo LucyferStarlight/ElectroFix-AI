@@ -24,7 +24,7 @@ class GroqProvider implements AiDiagnosticProvider
             throw new AiProviderException('missing_config', 'El servicio de diagnóstico IA no está configurado.');
         }
 
-        $model = $this->modelOverride ?? (string) config('services.groq.model', 'llama-3.3-70b-versatile');
+        $model = $this->modelOverride ?? (string) config('services.groq.model', 'llama-3.1-8b-instant');
         $timeout = (int) config('services.groq.timeout_seconds', 15);
         $prompt = $this->buildPrompt($deviceInfo, $symptoms);
         $systemPrompt = $this->systemPromptOverride ?? (string) config(

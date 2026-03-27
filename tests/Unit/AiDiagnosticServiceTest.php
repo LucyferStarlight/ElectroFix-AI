@@ -37,8 +37,8 @@ class AiDiagnosticServiceTest extends TestCase
                 'replacement_parts_cost' => 400,
                 'replacement_total_cost' => 1100,
             ],
-            'provider' => 'gemini',
-            'model' => 'gemini-1.5-flash',
+            'provider' => 'groq',
+            'model' => 'llama-3.1-8b-instant',
         ];
 
         $provider = $this->mock(AiDiagnosticProvider::class);
@@ -48,7 +48,7 @@ class AiDiagnosticServiceTest extends TestCase
                 diagnosis: 'Resumen',
                 estimatedCost: 1100.0,
                 requiresParts: true,
-                provider: 'gemini',
+                provider: 'groq',
                 tokensUsed: 200,
                 payload: $payload
             ));
@@ -56,16 +56,16 @@ class AiDiagnosticServiceTest extends TestCase
         $service = app(AiDiagnosticService::class);
         $result = $service->diagnose($order, $company, $actor, 'No enciende');
 
-        $this->assertSame('gemini', $result->provider);
+        $this->assertSame('groq', $result->provider);
         $this->assertTrue($result->requiresParts);
 
         $order->refresh();
         $this->assertNotNull($order->ai_diagnosed_at);
-        $this->assertSame('gemini', $order->ai_provider);
+        $this->assertSame('groq', $order->ai_provider);
         $this->assertSame('1100.00', (string) $order->ai_cost_replacement_total);
     }
 
-    public function test_it_falls_back_when_provider_fails(): void
+    public function test_it_throws_functional_exception_when_provider_fails(): void
     {
         [$company, $order, $actor] = $this->makeContext();
 
@@ -75,11 +75,19 @@ class AiDiagnosticServiceTest extends TestCase
             ->andThrow(new AiProviderException('provider_timeout', 'Proveedor no disponible.'));
 
         $service = app(AiDiagnosticService::class);
-        $result = $service->diagnose($order, $company, $actor, 'No calienta');
 
-        $this->assertSame('local', $result->provider);
-        $this->assertNotSame('', $result->diagnosis);
-        $this->assertSame(0, $result->tokensUsed);
+        $this->expectException(\App\Services\Exceptions\AiQuotaExceededException::class);
+        $this->expectExceptionMessage('El servicio de diagnóstico IA no está disponible temporalmente. Verifica tu conexión a internet e inténtalo nuevamente.');
+
+        try {
+            $service->diagnose($order, $company, $actor, 'No calienta');
+        } finally {
+            $this->assertDatabaseHas('company_ai_usages', [
+                'company_id' => $company->id,
+                'order_id' => $order->id,
+                'status' => 'provider_unavailable',
+            ]);
+        }
     }
 
     private function makeContext(): array

@@ -10,7 +10,7 @@ return [
             'Inventario esencial',
             'Facturación interna',
             'Diagnóstico IA · 10 consultas/mes',
-            'Contribuye al entrenamiento de ARIS',
+            'Diagnóstico asistido con Groq',
         ],
     ],
     'pro' => [
@@ -22,8 +22,8 @@ return [
             'Inventario completo',
             'Facturación interna avanzada',
             'Reportes operativos',
-            'Diagnóstico IA · 70 consultas/mes',
-            'Entrenamiento ARIS por caso con IA',
+            'Diagnóstico IA · 75 consultas/mes',
+            'Diagnóstico asistido con Groq',
         ],
     ],
     'enterprise' => [
@@ -31,7 +31,7 @@ return [
         'price' => env('PLAN_PRICE_ENTERPRISE', 999),
         'ai_enabled' => true,
         'features' => [
-            'IA de diagnóstico ARIS incluida',
+            'IA de diagnóstico con Groq incluida',
             'Reportes avanzados',
             'Soporte prioritario',
             'Integraciones personalizadas',

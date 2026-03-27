@@ -29,14 +29,14 @@ class PlanAccessTest extends TestCase
         $response->assertRedirect(route('admin.subscription.edit'));
     }
 
-    public function test_starter_plan_cannot_activate_ai(): void
+    public function test_starter_plan_can_activate_ai_with_its_limit(): void
     {
         [$company, $admin, $worker] = $this->createCompanyWithRoles();
         Plan::factory()->create([
             'name' => 'starter',
-            'ai_enabled' => false,
-            'max_ai_requests' => 0,
-            'max_ai_tokens' => 0,
+            'ai_enabled' => true,
+            'max_ai_requests' => 10,
+            'max_ai_tokens' => 8000,
         ]);
         $this->createActiveSubscription($company, ['plan' => 'starter']);
         $technician = $this->createAssignableTechnicianProfile($company, $worker, 'Tech Uno');
@@ -50,10 +50,10 @@ class PlanAccessTest extends TestCase
                 'request_ai_diagnosis' => 1,
                 'symptoms' => 'No enciende',
             ])
-            ->assertSessionHas('warning', 'Tu plan actual no incluye Asistente IA.');
+            ->assertSessionHasNoErrors();
 
-        $order = Order::query()->where('company_id', $company->id)->latest()->first();
-        $this->assertNull($order?->ai_diagnosed_at);
+        $order = Order::query()->where('company_id', $company->id)->latest()->firstOrFail();
+        $this->assertNotNull($order->ai_diagnosed_at);
     }
 
     public function test_enterprise_plan_can_activate_ai(): void

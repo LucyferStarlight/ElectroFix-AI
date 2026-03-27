@@ -4,6 +4,7 @@
 
 @section('content')
 @php($statusLabels = ['received' => 'Recibido', 'diagnostic' => 'Diagnóstico', 'repairing' => 'Reparación', 'quote' => 'Cotización', 'ready' => 'Listo', 'delivered' => 'Entregado', 'not_repaired' => 'No reparado'])
+@php($currentUser = auth()->user())
 <div class="container-fluid p-0">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
         <div>
@@ -76,7 +77,8 @@
 
                                         <h6 class="fw-bold">Cliente y Equipo</h6>
                                         <p class="mb-1"><strong>Cliente:</strong> {{ $order->customer->name }}</p>
-                                        <p class="mb-1"><strong>Email:</strong> {{ $order->customer->email }}</p>
+                                        <p class="mb-1"><strong>Teléfono:</strong> {{ $order->customer->phone }}</p>
+                                        <p class="mb-1"><strong>Correo:</strong> {{ $order->customer->email ?: 'No registrado' }}</p>
                                         <p class="mb-1"><strong>Equipo:</strong> {{ $order->equipment->brand }} {{ $order->equipment->model }}</p>
                                         <p class="mb-3"><strong>Serie:</strong> {{ $order->equipment->serial_number ?: 'N/A' }}</p>
 
@@ -162,9 +164,9 @@
 </div>
 
 <div class="modal fade" id="orderCreateModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content card-ui">
-            <form method="post" action="{{ route('worker.orders.store') }}" id="orderCreateForm">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable billing-modal-dialog">
+        <div class="modal-content card-ui billing-modal-content">
+            <form method="post" action="{{ route('worker.orders.store') }}" id="orderCreateForm" class="billing-modal-form">
                 @csrf
                 <div class="modal-header border-0">
                     <h5 class="modal-title fw-bold">Nueva Orden de Trabajo</h5>
@@ -200,7 +202,7 @@
                                 <div class="col-md-6"><label class="form-label">Costo estimado</label><input class="form-control input-ui" type="number" step="0.01" min="0" name="estimated_cost"></div>
                                 <div class="col-md-6">
                                     <label class="form-label">Técnico asignado *</label>
-                                    @if(auth()->user()->role === 'admin')
+                                    @if($currentUser?->role === 'admin')
                                         <select class="form-select input-ui" name="technician_profile_id" required>
                                             <option value="">Seleccionar técnico...</option>
                                             @foreach($companyTechnicians as $technician)
@@ -210,44 +212,52 @@
                                                 </option>
                                             @endforeach
                                         </select>
-                                    @elseif(auth()->user()->role === 'worker')
-                                        <input class="form-control input-ui" value="{{ auth()->user()->name }}" readonly>
-                                        @if(auth()->user()->technicianProfile)
-                                            <input type="hidden" name="technician_profile_id" value="{{ auth()->user()->technicianProfile->id }}">
+                                    @elseif($currentUser?->role === 'worker')
+                                        <input class="form-control input-ui" value="{{ $currentUser?->name }}" readonly>
+                                        @if($currentUser?->technicianProfile)
+                                            <input type="hidden" name="technician_profile_id" value="{{ $currentUser->technicianProfile->id }}">
                                         @endif
                                     @else
                                         <input class="form-control input-ui" name="technician" required>
                                     @endif
                                 </div>
                                 <div class="col-12">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="1" name="request_ai_diagnosis" id="requestAiDiagnosis" @disabled(!$aiEnabled)>
-                                        <label class="form-check-label" for="requestAiDiagnosis">
-                                            Solicitar diagnóstico IA al guardar la orden
-                                        </label>
+                                    <div class="card border-0 bg-light-subtle">
+                                        <div class="card-body py-3">
+                                            <div class="form-check form-switch mb-0">
+                                                <input class="form-check-input" type="checkbox" value="1" name="request_ai_diagnosis" id="requestAiDiagnosis" @disabled(!$aiEnabled)>
+                                                <label class="form-check-label fw-semibold" for="requestAiDiagnosis">
+                                                    Obtener diagnóstico IA al guardar la orden
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <small class="text-muted d-block mt-1">
                                         @if($aiEnabled)
                                             Disponible en plan {{ strtoupper($aiPlan) }}. Límite de este mes: {{ $aiQueriesUsed }}/{{ $aiQueryLimit }} consultas.
                                         @else
-                                            Esta función está disponible solo en planes Enterprise y Developer Test.
+                                            Esta función no está disponible para tu plan actual.
                                         @endif
                                     </small>
                                 </div>
                             </div>
                         </div>
                         <div class="col-lg-6">
-                            <div class="card card-ui h-100">
-                                <div class="card-body" id="aiPanel">
-                                    <h6 class="fw-bold">Análisis AI</h6>
-                                    <p class="text-muted mb-2">Se ejecuta al guardar la orden y solo una vez por orden.</p>
-                                    <ul class="mb-0 text-muted">
-                                        <li>Obtiene equipo + falla reportada.</li>
-                                        <li>Genera diagnóstico preliminar y costos sugeridos.</li>
-                                        <li>Si no requiere piezas, muestra solo mano de obra.</li>
-                                    </ul>
+                                <div class="card card-ui h-100">
+                                    <div class="card-body" id="aiPanel">
+                                        <h6 class="fw-bold">Análisis AI</h6>
+                                        <p class="text-muted mb-2">Se ejecuta al guardar la orden y solo una vez por orden.</p>
+                                        <ul class="mb-0 text-muted">
+                                            <li>Obtiene equipo + falla reportada.</li>
+                                            <li>Genera diagnóstico preliminar y costos sugeridos.</li>
+                                            <li>Si no requiere piezas, muestra solo mano de obra.</li>
+                                            <li>Plan Starter: 10 usos por mes.</li>
+                                            <li>Plan Pro: 75 usos por mes.</li>
+                                            <li>Plan Enterprise: 200 usos por mes.</li>
+                                            <li>Los síntomas deben capturarse en máximo 600 caracteres.</li>
+                                        </ul>
+                                    </div>
                                 </div>
-                            </div>
                         </div>
                     </div>
                 </div>

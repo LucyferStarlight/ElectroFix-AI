@@ -1,5 +1,5 @@
 <?php
 
 return [
-    'provider' => env('AI_PROVIDER', 'gemini'),
+    'provider' => env('AI_PROVIDER', 'groq'),
 ];

@@ -7,12 +7,9 @@ use App\DTOs\AiDiagnosticResult;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\User;
-use App\Services\Ai\ArisProvider;
-use App\Services\Ai\LocalFallbackProvider;
 use App\Services\Exceptions\AiProviderException;
 use App\Services\Exceptions\AiQuotaExceededException;
 use App\Services\Exceptions\AiUsageException;
-use App\Services\Exceptions\ArisNotAvailableException;
 use Illuminate\Support\Facades\Log;
 
 class AiDiagnosticService
@@ -21,8 +18,6 @@ class AiDiagnosticService
 
     public function __construct(
         private readonly AiDiagnosticProvider $provider,
-        private readonly LocalFallbackProvider $localFallbackProvider,
-        private readonly ArisProvider $arisProvider,
         private readonly AiUsageService $aiUsageService,
         private readonly AiTokenEstimator $tokenEstimator,
         private readonly OrderDiagnosticService $orderDiagnosticService
@@ -64,38 +59,47 @@ class AiDiagnosticService
             throw new AiQuotaExceededException($exception->status(), $exception->getMessage());
         }
 
-        $provider = $this->resolveProvider($company);
-
         try {
-            $result = $provider->diagnose($symptoms, $deviceInfo);
-        } catch (ArisNotAvailableException $exception) {
-            $this->aiUsageService->registerBlocked(
-                $company,
-                $order,
-                $plan,
-                'blocked_plan',
-                $exception->getMessage(),
-                $promptChars
-            );
-
-            throw new AiQuotaExceededException('blocked_plan', $exception->getMessage());
+            $result = $this->provider->diagnose($symptoms, $deviceInfo);
         } catch (AiProviderException $exception) {
-            Log::channel('ai')->warning('AI provider failed, using local fallback', [
+            Log::channel('ai')->warning('AI provider failed', [
                 'company_id' => $company->id,
                 'order_id' => $order->id,
                 'status' => $exception->status(),
                 'message' => $exception->getMessage(),
             ]);
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                'provider_unavailable',
+                'El servicio de diagnóstico IA no está disponible temporalmente. Verifica tu conexión a internet e inténtalo nuevamente.',
+                $promptChars
+            );
 
-            $result = $this->localFallbackProvider->diagnose($symptoms, $deviceInfo);
+            throw new AiQuotaExceededException(
+                'provider_unavailable',
+                'El servicio de diagnóstico IA no está disponible temporalmente. Verifica tu conexión a internet e inténtalo nuevamente.'
+            );
         } catch (\Throwable $exception) {
-            Log::channel('ai')->error('Unexpected AI provider failure, using local fallback', [
+            Log::channel('ai')->error('Unexpected AI provider failure', [
                 'company_id' => $company->id,
                 'order_id' => $order->id,
                 'error' => $exception->getMessage(),
             ]);
+            $this->aiUsageService->registerBlocked(
+                $company,
+                $order,
+                $plan,
+                'provider_unavailable',
+                'El servicio de diagnóstico IA no está disponible temporalmente. Verifica tu conexión a internet e inténtalo nuevamente.',
+                $promptChars
+            );
 
-            $result = $this->localFallbackProvider->diagnose($symptoms, $deviceInfo);
+            throw new AiQuotaExceededException(
+                'provider_unavailable',
+                'El servicio de diagnóstico IA no está disponible temporalmente. Verifica tu conexión a internet e inténtalo nuevamente.'
+            );
         }
 
         $analysis = $result->payload;
@@ -152,16 +156,6 @@ class AiDiagnosticService
         ]);
 
         return $result;
-    }
-
-    private function resolveProvider(Company $company): AiDiagnosticProvider
-    {
-        $override = $company->subscription?->planModel?->ai_provider_override;
-        if ($override === 'aris') {
-            return $this->arisProvider;
-        }
-
-        return $this->provider;
     }
 
     private function deviceInfo(Order $order): string

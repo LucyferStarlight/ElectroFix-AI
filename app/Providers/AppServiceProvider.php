@@ -3,10 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\AiDiagnosticProvider;
-use App\Services\Ai\ArisProvider;
-use App\Services\Ai\GeminiProvider;
 use App\Services\Ai\GroqProvider;
-use App\Services\Ai\LocalFallbackProvider;
 use App\Models\Company;
 use App\Models\Order;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -27,30 +24,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(AiDiagnosticProvider::class, function (): AiDiagnosticProvider {
-            $provider = (string) config('ai.provider', env('AI_PROVIDER', 'gemini'));
-            $apiKey = (string) config('services.gemini.api_key');
-
-            if ($provider === 'aris') {
-                return app(ArisProvider::class);
-            }
-
-            if ($provider === 'local') {
-                return app(LocalFallbackProvider::class);
-            }
-
-            if ($provider === 'groq') {
-                return app(GroqProvider::class);
-            }
-
-            if ($apiKey === '') {
-                return app(LocalFallbackProvider::class);
-            }
-
-            return app(GeminiProvider::class);
-        });
-
-        $this->app->bind(ArisProvider::class, function () {
-            return new ArisProvider();
+            return app(GroqProvider::class);
         });
     }
 

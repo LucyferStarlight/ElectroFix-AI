@@ -114,7 +114,7 @@
                             <select class="form-select input-ui" name="customer_id" id="customerSelect">
                                 <option value="">Seleccionar...</option>
                                 @foreach($customers as $customer)
-                                    <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->email }})</option>
+                                    <option value="{{ $customer->id }}">{{ $customer->name }} ({{ $customer->phone }})</option>
                                 @endforeach
                             </select>
                         </div>

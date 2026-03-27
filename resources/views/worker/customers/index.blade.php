@@ -15,7 +15,7 @@
     <div class="card card-ui mb-4">
         <div class="card-body d-flex gap-3 flex-wrap align-items-center">
             <form method="get" class="d-flex gap-2 flex-grow-1">
-                <input class="form-control input-ui" type="text" name="search" value="{{ $search }}" placeholder="Buscar por nombre, email o teléfono...">
+                <input class="form-control input-ui" type="text" name="search" value="{{ $search }}" placeholder="Buscar por nombre, teléfono o correo...">
                 <button class="btn btn-ui btn-outline-ui" type="submit">Buscar</button>
             </form>
             <span class="badge badge-ui badge-ui-info">{{ $customers->total() }} clientes</span>
@@ -39,8 +39,8 @@
                             <tr>
                                 <td class="px-4 fw-semibold">{{ $customer->name }}</td>
                                 <td>
-                                    <div>{{ $customer->email }}</div>
-                                    <small class="text-muted">{{ $customer->phone ?: 'Sin teléfono' }}</small>
+                                    <div>{{ $customer->phone }}</div>
+                                    <small class="text-muted">{{ $customer->email ?: 'Sin correo registrado' }}</small>
                                 </td>
                                 <td>{{ $customer->address ?: 'Sin dirección' }}</td>
                                 <td>{{ $customer->created_at->format('Y-m-d') }}</td>
@@ -71,8 +71,8 @@
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label">Nombre *</label><input class="form-control input-ui" name="name" required></div>
-                        <div class="col-md-6"><label class="form-label">Correo *</label><input type="email" class="form-control input-ui" name="email" required></div>
-                        <div class="col-md-6"><label class="form-label">Teléfono</label><input class="form-control input-ui" name="phone"></div>
+                        <div class="col-md-6"><label class="form-label">Teléfono *</label><input class="form-control input-ui" name="phone" required></div>
+                        <div class="col-md-6"><label class="form-label">Correo</label><input type="email" class="form-control input-ui" name="email"></div>
                         <div class="col-md-6"><label class="form-label">Dirección</label><input class="form-control input-ui" name="address"></div>
                     </div>
                 </div>

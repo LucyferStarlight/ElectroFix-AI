@@ -54,7 +54,7 @@ class OrderAiIntegrationTest extends TestCase
         ]);
     }
 
-    public function test_order_ai_is_blocked_when_plan_does_not_include_it(): void
+    public function test_order_with_ai_is_generated_for_starter_plan(): void
     {
         [$worker, $customer, $equipment, $company] = $this->makeContext('starter');
 
@@ -67,15 +67,15 @@ class OrderAiIntegrationTest extends TestCase
                 'request_ai_diagnosis' => 1,
             ])
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('warning', 'Tu plan actual no incluye Asistente IA.');
+            ->assertSessionHas('success');
 
         $order = $company->orders()->latest('id')->firstOrFail();
-        $this->assertNull($order->ai_diagnosed_at);
+        $this->assertNotNull($order->ai_diagnosed_at);
 
         $this->assertDatabaseHas('company_ai_usages', [
             'company_id' => $company->id,
             'order_id' => $order->id,
-            'status' => 'blocked_plan',
+            'status' => 'success',
         ]);
     }
 
@@ -84,7 +84,7 @@ class OrderAiIntegrationTest extends TestCase
         [$worker, $customer, $equipment, $company] = $this->makeContext('pro');
         AiUsage::query()->create([
             'company_id' => $company->id,
-            'ai_requests_used' => 100,
+            'ai_requests_used' => 75,
             'ai_tokens_used' => 500,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
@@ -112,7 +112,7 @@ class OrderAiIntegrationTest extends TestCase
         AiUsage::query()->create([
             'company_id' => $company->id,
             'ai_requests_used' => 10,
-            'ai_tokens_used' => 59990,
+            'ai_tokens_used' => 49990,
             'current_cycle_start' => now()->startOfMonth()->toDateString(),
             'current_cycle_end' => now()->endOfMonth()->toDateString(),
             'overage_requests' => 0,

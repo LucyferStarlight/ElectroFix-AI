@@ -135,6 +135,7 @@ class BillingController extends Controller
                 'id' => $customer->id,
                 'name' => $customer->name,
                 'email' => $customer->email,
+                'phone' => $customer->phone,
             ],
             'orders' => $orders,
         ]);

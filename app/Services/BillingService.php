@@ -160,7 +160,7 @@ class BillingService
             'company_id' => $company->id,
             'name' => $walkInName,
             'email' => sprintf('walkin+%d@%s.local', $document->id, strtolower($company->country ?: 'mx')),
-            'phone' => null,
+            'phone' => $company->billing_phone ?: $company->owner_phone ?: 'PENDIENTE',
             'address' => 'Mostrador',
         ]);
 

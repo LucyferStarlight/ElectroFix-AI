@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class CompanySubscriptionService
 {
-    public function __construct(private readonly PlanCatalogService $planCatalogService)
-    {
+    public function __construct(
+        private readonly PlanCatalogService $planCatalogService,
+        private readonly TrialPolicyService $trialPolicyService
+    ) {
     }
 
     public function checkout(Company $company, string $planName, string $billingPeriod, string $paymentMethod): Subscription
@@ -34,12 +36,13 @@ class CompanySubscriptionService
 
         $price = $this->planCatalogService->resolvePrice($planName, $billingPeriod, (string) $company->currency);
         $plan = $price->plan;
+        $trialDays = $this->trialPolicyService->trialDaysForPrice($price);
 
         $company->createOrGetStripeCustomer();
         $company->updateDefaultPaymentMethod($paymentMethod);
 
         $builder = $company->newSubscription('default', $price->stripe_price_id)
-            ->trialDays((int) $price->trial_days);
+            ->trialDays($trialDays);
 
         if ($plan->overage_enabled) {
             if ($plan->stripe_overage_requests_price_id) {

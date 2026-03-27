@@ -43,9 +43,9 @@ class RepairOutcomeService
             'outcome_notes' => $data['outcome_notes'] ?? null,
             'work_performed' => (string) $data['work_performed'],
             'actual_amount_charged' => (float) $data['actual_amount_charged'],
-            'aris_estimated_cost' => $this->resolveArisEstimatedCost($order),
+            'aris_estimated_cost' => $this->resolveAiEstimatedCost($order),
             'had_ai_diagnosis' => $hadAiDiagnosis,
-            'feeds_aris_training' => $this->shouldFeedAris($order, $company),
+            'feeds_aris_training' => $this->shouldFeedAiDataset($order, $company),
             'plan_at_close' => $planAtClose,
         ]);
     }
@@ -89,11 +89,11 @@ class RepairOutcomeService
         return $outcome->fresh();
     }
 
-    private function shouldFeedAris(Order $order, Company $company): bool
+    private function shouldFeedAiDataset(Order $order, Company $company): bool
     {
         $plan = $company->subscription?->plan ?? 'starter';
 
-        // Starter siempre alimenta el entrenamiento de ARIS,
+        // Starter siempre alimenta el dataset de IA,
         // independientemente de si se usó diagnóstico IA en la orden.
         if ($plan === 'starter') {
             return true;
@@ -123,7 +123,7 @@ class RepairOutcomeService
         return $order;
     }
 
-    private function resolveArisEstimatedCost(Order $order): ?float
+    private function resolveAiEstimatedCost(Order $order): ?float
     {
         $diagnostic = $order->latestDiagnostic;
         if (! $diagnostic) {
