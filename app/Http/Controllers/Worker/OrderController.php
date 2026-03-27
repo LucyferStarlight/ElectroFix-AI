@@ -20,7 +20,7 @@ use App\Services\Exceptions\OutcomeNotFoundException;
 use App\Services\OrderCreationService;
 use App\Services\OrderCustomerNotificationService;
 use App\Services\OrderStateMachine;
-use App\Services\OrderWorkflowValidator;
+use App\Services\OrderWorkflowService;
 use App\Services\RepairOutcomeService;
 use App\Support\OrderStatus;
 use Illuminate\Http\JsonResponse;
@@ -139,16 +139,21 @@ class OrderController extends Controller
         return back()->with('success', 'Estado de orden actualizado.');
     }
 
-    public function approve(ApproveOrderRequest $request, Order $order): RedirectResponse
+    public function approve(
+        ApproveOrderRequest $request,
+        Order $order,
+        OrderWorkflowService $orderWorkflowService
+    ): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
 
         try {
+            $orderWorkflowService->ensureCanApprove($order);
             $order->approve(
                 $request->validated('approved_by') ?? 'customer',
                 (string) $request->validated('approval_channel')
             );
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return back()->withErrors(['approval' => $exception->getMessage()]);
         }
 
@@ -171,7 +176,7 @@ class OrderController extends Controller
     public function deliver(
         Request $request,
         Order $order,
-        OrderWorkflowValidator $orderWorkflowValidator,
+        OrderWorkflowService $orderWorkflowService,
         RepairOutcomeService $repairOutcomeService,
         OrderCustomerNotificationService $orderCustomerNotificationService
     ): RedirectResponse {
@@ -179,7 +184,7 @@ class OrderController extends Controller
         $order->loadMissing('billingItems', 'repairOutcome');
 
         try {
-            $orderWorkflowValidator->ensureCanDeliver($order);
+            $orderWorkflowService->ensureCanDeliver($order);
         } catch (OrderWorkflowException $exception) {
             abort(422, $exception->getMessage());
         }
@@ -219,7 +224,7 @@ class OrderController extends Controller
 
         if ($order) {
             try {
-                app(OrderWorkflowValidator::class)->ensureCanDiagnose($order);
+                app(OrderWorkflowService::class)->ensureCanDiagnose($order);
             } catch (OrderWorkflowException $exception) {
                 return response()->json([
                     'message' => $exception->getMessage(),

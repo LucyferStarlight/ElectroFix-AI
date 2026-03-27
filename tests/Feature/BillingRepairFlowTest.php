@@ -52,8 +52,22 @@ class BillingRepairFlowTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
-            'status' => OrderStatus::CREATED,
+            'status' => OrderStatus::APPROVED,
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
             'estimated_cost' => 1500,
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'approved',
+            'version' => 1,
+            'is_active' => true,
         ]);
 
         Sanctum::actingAs($user, [ApiAbility::BILLING_WRITE]);

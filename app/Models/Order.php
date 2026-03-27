@@ -211,6 +211,14 @@ class Order extends Model
         return $this->hasMany(BillingDocument::class);
     }
 
+    public function activeQuote(): HasOne
+    {
+        return $this->hasOne(BillingDocument::class)
+            ->where('document_type', 'quote')
+            ->where('is_active', true)
+            ->latestOfMany('version');
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(OrderPayment::class);
@@ -273,7 +281,7 @@ class Order extends Model
                 'processed_at' => $context['processed_at'] ?? now(),
             ]);
 
-            $this->refreshPaymentTotals();
+            $this->recalculatePaymentStatus();
 
             return $payment->fresh();
         });
@@ -305,7 +313,7 @@ class Order extends Model
                 'processed_at' => $context['processed_at'] ?? now(),
             ]);
 
-            $this->refreshPaymentTotals();
+            $this->recalculatePaymentStatus();
 
             return $refund->fresh();
         });
@@ -313,11 +321,13 @@ class Order extends Model
 
     public function isFullyPaid(): bool
     {
-        return (float) $this->total_paid >= $this->paymentDueAmount()
-            && $this->paymentDueAmount() > 0;
+        $totalOrderCost = $this->totalOrderCost();
+
+        return $totalOrderCost > 0
+            && (float) $this->total_paid >= $totalOrderCost;
     }
 
-    public function paymentDueAmount(): float
+    public function totalOrderCost(): float
     {
         $invoicedAmount = (float) $this->billingItems()->sum('line_total');
 
@@ -337,12 +347,17 @@ class Order extends Model
         return round((float) $this->estimated_cost, 2);
     }
 
+    public function paymentDueAmount(): float
+    {
+        return $this->totalOrderCost();
+    }
+
     public function outstandingBalance(): float
     {
         return max(0, round($this->paymentDueAmount() - (float) $this->total_paid, 2));
     }
 
-    public function refreshPaymentTotals(): self
+    public function recalculatePaymentStatus(): self
     {
         $payments = (float) $this->payments()->where('direction', 'payment')->sum('amount');
         $refunds = (float) $this->payments()->where('direction', 'refund')->sum('amount');
@@ -350,11 +365,11 @@ class Order extends Model
 
         $hasPayments = $payments > 0;
         $hasRefunds = $refunds > 0;
-        $dueAmount = $this->paymentDueAmount();
+        $totalOrderCost = $this->totalOrderCost();
 
         $paymentStatus = match (true) {
             $hasPayments && $netPaid <= 0 && $hasRefunds => OrderPaymentStatus::REFUNDED->value,
-            $dueAmount > 0 && $netPaid >= $dueAmount => OrderPaymentStatus::PAID->value,
+            $totalOrderCost > 0 && $netPaid >= $totalOrderCost => OrderPaymentStatus::PAID->value,
             $netPaid > 0 => OrderPaymentStatus::PARTIAL->value,
             default => OrderPaymentStatus::PENDING->value,
         };
@@ -365,5 +380,26 @@ class Order extends Model
         ])->save();
 
         return $this->refresh();
+    }
+
+    public function refreshPaymentTotals(): self
+    {
+        return $this->recalculatePaymentStatus();
+    }
+
+    public function hasQuotes(): bool
+    {
+        return $this->billingDocuments()
+            ->where('document_type', 'quote')
+            ->exists();
+    }
+
+    public function hasApprovedActiveQuote(): bool
+    {
+        return $this->billingDocuments()
+            ->where('document_type', 'quote')
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->exists();
     }
 }

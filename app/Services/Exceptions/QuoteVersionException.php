@@ -21,6 +21,11 @@ class QuoteVersionException extends DomainException
         return new self('Solo las cotizaciones pueden aprobarse.');
     }
 
+    public static function onlyQuotesCanBeSent(): self
+    {
+        return new self('Solo las cotizaciones pueden enviarse.');
+    }
+
     public static function onlyQuotesCanBeRejected(): self
     {
         return new self('Solo las cotizaciones pueden rechazarse.');

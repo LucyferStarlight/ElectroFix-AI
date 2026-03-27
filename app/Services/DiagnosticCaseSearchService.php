@@ -9,8 +9,14 @@ use Illuminate\Support\Collection;
 
 class DiagnosticCaseSearchService
 {
-    public function findSimilarCases(string $symptoms, array $context = [], int $limit = 10): Collection
+    public function findSimilarCases(string $symptoms, int|array|null $equipmentId = null, int $limit = 10): Collection
     {
+        $context = is_array($equipmentId) ? $equipmentId : [];
+
+        if (is_int($equipmentId)) {
+            $context['equipment_id'] = $equipmentId;
+        }
+
         $metadata = DiagnosticDataNormalizer::normalizeDiagnosticMetadata(
             $symptoms,
             [],
@@ -23,7 +29,11 @@ class DiagnosticCaseSearchService
 
         $query = OrderDiagnostic::query()
             ->with(['order.customer', 'order.equipment'])
-            ->whereNotNull('normalized_symptoms');
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNotNull('normalized_symptoms')
+                    ->orWhereNotNull('symptoms_snapshot');
+            });
 
         if (isset($context['company_id'])) {
             $query->where('company_id', $context['company_id']);
@@ -118,10 +128,12 @@ class DiagnosticCaseSearchService
 
             if ($normalizedSymptoms !== null) {
                 $builder->orWhere('normalized_symptoms', 'like', '%'.$normalizedSymptoms.'%');
+                $builder->orWhere('symptoms_snapshot', 'like', '%'.$normalizedSymptoms.'%');
             }
 
             foreach ($keywords as $keyword) {
                 $builder->orWhere('normalized_symptoms', 'like', '%'.$keyword.'%');
+                $builder->orWhere('symptoms_snapshot', 'like', '%'.$keyword.'%');
                 $builder->orWhereJsonContains('symptom_keywords', $keyword);
             }
         });

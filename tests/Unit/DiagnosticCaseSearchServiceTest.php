@@ -90,4 +90,47 @@ class DiagnosticCaseSearchServiceTest extends TestCase
         $this->assertGreaterThan(0, $results->first()['similarity_score']);
         $this->assertContains('ruido', $results->first()['matched_keywords']);
     }
+
+    public function test_it_accepts_equipment_id_as_second_argument(): void
+    {
+        $company = Company::factory()->create();
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'type' => 'Microondas',
+        ]);
+
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+        ]);
+
+        $diagnostic = OrderDiagnostic::query()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'equipment_id' => $equipment->id,
+            'version' => 1,
+            'source' => 'ai',
+            'symptoms_snapshot' => 'No calienta y hace chispas',
+            'normalized_symptoms' => 'no calienta y hace chispas',
+            'symptom_keywords' => ['calienta', 'chispas'],
+            'equipment_snapshot' => ['type' => 'Microondas'],
+            'equipment_type' => 'microondas',
+            'diagnostic_summary' => 'Falla de magnetron',
+            'failure_type' => 'heating_failure',
+            'diagnostic_signature' => 'microondas|heating_failure|calienta-chispas',
+            'possible_causes' => ['Magnetron dañado'],
+            'recommended_actions' => ['Cambiar magnetron'],
+        ]);
+
+        $results = app(DiagnosticCaseSearchService::class)->findSimilarCases(
+            'No calienta y genera chispas',
+            $equipment->id
+        );
+
+        $this->assertSame($diagnostic->id, $results->first()['diagnostic']->id);
+    }
 }

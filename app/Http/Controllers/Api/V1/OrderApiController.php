@@ -18,7 +18,7 @@ use App\Services\Exceptions\OrderApprovalException;
 use App\Services\Exceptions\OrderWorkflowException;
 use App\Services\OrderCreationService;
 use App\Services\OrderStateMachine;
-use App\Services\OrderWorkflowValidator;
+use App\Services\OrderWorkflowService;
 use App\Support\OrderStatus;
 use Illuminate\Http\Request;
 
@@ -97,16 +97,21 @@ class OrderApiController extends Controller
         return $this->successResource(new OrderResource($order->fresh(['customer', 'equipment', 'technicianProfile'])));
     }
 
-    public function approve(ApproveOrderRequest $request, Order $order)
+    public function approve(
+        ApproveOrderRequest $request,
+        Order $order,
+        OrderWorkflowService $orderWorkflowService
+    )
     {
         $this->assertCompanyAccess($request, $order->company_id);
 
         try {
+            $orderWorkflowService->ensureCanApprove($order);
             $order->approve(
                 $request->validated('approved_by') ?? 'customer',
                 (string) $request->validated('approval_channel')
             );
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return response()->json([
                 'ok' => false,
                 'data' => null,
@@ -142,13 +147,13 @@ class OrderApiController extends Controller
         return $this->successResource(new OrderResource($order->fresh(['customer', 'equipment', 'technicianProfile'])));
     }
 
-    public function storeDiagnostic(Request $request, Order $order, OrderWorkflowValidator $orderWorkflowValidator)
+    public function storeDiagnostic(Request $request, Order $order, OrderWorkflowService $orderWorkflowService)
     {
         $this->assertCompanyAccess($request, $order->company_id);
         $order->loadMissing('equipment', 'company.subscription.planModel');
 
         try {
-            $orderWorkflowValidator->ensureCanDiagnose($order);
+            $orderWorkflowService->ensureCanDiagnose($order);
         } catch (OrderWorkflowException $exception) {
             return response()->json([
                 'ok' => false,

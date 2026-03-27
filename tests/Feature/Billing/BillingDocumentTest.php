@@ -104,7 +104,21 @@ class BillingDocumentTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
-            'status' => OrderStatus::RECEIVED,
+            'status' => OrderStatus::APPROVED,
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'approved',
+            'version' => 1,
+            'is_active' => true,
         ]);
 
         $response = $this->actingAs($worker)
@@ -146,6 +160,21 @@ class BillingDocumentTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
+            'status' => OrderStatus::APPROVED,
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'approved',
+            'version' => 1,
+            'is_active' => true,
         ]);
         $item = InventoryItem::factory()->create([
             'company_id' => $company->id,
@@ -426,12 +455,42 @@ class BillingDocumentTest extends TestCase
             'is_active' => true,
         ]);
 
-        $quote->approveQuote('customer', 'whatsapp');
+        $quote->approve('customer', 'whatsapp');
 
         $this->assertSame('approved', $quote->fresh()->status);
         $this->assertTrue($quote->fresh()->is_active);
         $this->assertSame(OrderStatus::APPROVED, $order->fresh()->status);
         $this->assertSame('customer', $order->fresh()->approved_by);
         $this->assertSame('whatsapp', $order->fresh()->approval_channel);
+    }
+
+    public function test_rejecting_quote_marks_it_inactive(): void
+    {
+        [$company] = $this->createCompanyWithRoles();
+
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create(['company_id' => $company->id, 'customer_id' => $customer->id]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'status' => OrderStatus::QUOTED,
+        ]);
+
+        $quote = BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'sent',
+            'version' => 1,
+            'is_active' => true,
+        ]);
+
+        $quote->reject();
+
+        $this->assertSame('rejected', $quote->fresh()->status);
+        $this->assertFalse($quote->fresh()->is_active);
     }
 }

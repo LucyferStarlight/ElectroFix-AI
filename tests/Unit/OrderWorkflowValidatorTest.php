@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Order;
 use App\Models\OrderRepairOutcome;
+use App\Models\BillingDocument;
 use App\Services\OrderWorkflowValidator;
 use App\Support\OrderStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,6 +52,28 @@ class OrderWorkflowValidatorTest extends TestCase
         ]);
 
         $this->assertTrue(app(OrderWorkflowValidator::class)->canRepair($order));
+    }
+
+    public function test_cannot_repair_when_active_quote_is_not_approved(): void
+    {
+        $order = Order::factory()->create([
+            'status' => OrderStatus::APPROVED,
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $order->company_id,
+            'customer_id' => $order->customer_id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'version' => 1,
+            'status' => 'sent',
+            'is_active' => true,
+        ]);
+
+        $this->assertFalse(app(OrderWorkflowValidator::class)->canRepair($order));
     }
 
     public function test_cannot_repair_without_formal_approval(): void

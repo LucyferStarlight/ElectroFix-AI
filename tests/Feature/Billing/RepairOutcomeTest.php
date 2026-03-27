@@ -3,6 +3,7 @@
 namespace Tests\Feature\Billing;
 
 use App\Models\Company;
+use App\Models\BillingDocument;
 use App\Models\Customer;
 use App\Models\Equipment;
 use App\Models\Order;
@@ -254,7 +255,22 @@ class RepairOutcomeTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
+            'status' => 'approved',
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
             'ai_diagnosed_at' => $withAiDiagnosis ? now() : null,
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'source' => 'repair',
+            'status' => 'approved',
+            'version' => 1,
+            'is_active' => true,
         ]);
 
         return [$company, $worker, $order, $customer, $admin];

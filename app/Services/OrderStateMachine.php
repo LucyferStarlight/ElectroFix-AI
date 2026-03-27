@@ -6,9 +6,12 @@ use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\Exceptions\InvalidOrderStatusTransitionException;
 use App\Services\Exceptions\OrderApprovalException;
+use App\Services\Exceptions\OrderWorkflowException;
 
 class OrderStateMachine
 {
+    public function __construct(private readonly OrderWorkflowService $orderWorkflowService) {}
+
     public function canTransition(OrderStatus|string|null $from, OrderStatus|string $to): bool
     {
         $fromStatus = OrderStatus::tryFromInput($from);
@@ -113,8 +116,18 @@ class OrderStateMachine
             throw OrderApprovalException::approvalContextRequired();
         }
 
-        if ($toStatus === OrderStatus::IN_REPAIR && ! $order->isApproved()) {
-            throw OrderApprovalException::approvalRequiredForRepair();
+        if ($toStatus === OrderStatus::IN_REPAIR) {
+            if (! $order->isApproved()) {
+                throw OrderApprovalException::approvalRequiredForRepair();
+            }
+
+            if (! $this->orderWorkflowService->canRepair($order)) {
+                throw OrderWorkflowException::cannotRepair();
+            }
+        }
+
+        if ($toStatus === OrderStatus::CLOSED && ! $this->orderWorkflowService->canClose($order)) {
+            throw OrderWorkflowException::cannotCloseUntilPaid();
         }
     }
 }

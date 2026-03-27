@@ -3,8 +3,10 @@
 namespace Tests\Unit;
 
 use App\Models\Order;
+use App\Models\BillingDocument;
 use App\Services\Exceptions\InvalidOrderStatusTransitionException;
 use App\Services\Exceptions\OrderApprovalException;
+use App\Services\Exceptions\OrderWorkflowException;
 use App\Services\OrderStateMachine;
 use App\Support\OrderStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,6 +66,30 @@ class OrderStateMachineTest extends TestCase
         ]);
 
         $this->expectException(OrderApprovalException::class);
+
+        app(OrderStateMachine::class)->transition($order, OrderStatus::IN_REPAIR);
+    }
+
+    public function test_in_repair_requires_approved_active_quote_when_order_has_quotes(): void
+    {
+        $order = Order::factory()->create([
+            'status' => OrderStatus::APPROVED,
+            'approved_at' => now(),
+            'approved_by' => 'customer',
+            'approval_channel' => 'whatsapp',
+        ]);
+
+        BillingDocument::factory()->create([
+            'company_id' => $order->company_id,
+            'customer_id' => $order->customer_id,
+            'order_id' => $order->id,
+            'document_type' => 'quote',
+            'version' => 1,
+            'status' => 'sent',
+            'is_active' => true,
+        ]);
+
+        $this->expectException(OrderWorkflowException::class);
 
         app(OrderStateMachine::class)->transition($order, OrderStatus::IN_REPAIR);
     }

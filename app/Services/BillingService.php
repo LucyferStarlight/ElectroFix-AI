@@ -19,7 +19,7 @@ class BillingService
     public function __construct(
         private readonly RepairOutcomeService $repairOutcomeService,
         private readonly OrderStateMachine $orderStateMachine,
-        private readonly OrderWorkflowValidator $orderWorkflowValidator
+        private readonly OrderWorkflowService $orderWorkflowService
     ) {}
 
     public function createDocument(Company $company, User $actor, array $payload): BillingDocument
@@ -231,6 +231,10 @@ class BillingService
         [$subtotal, $vatAmount, $total, $items] = $this->buildItemsAndTotals($company, $vatRate, $taxMode, $payload['items']);
 
         $quoteOrder = $forcedOrder ?? $this->resolveQuoteOrder($company, $payload['document_type'], $items);
+        if ($payload['document_type'] === 'quote' && $quoteOrder) {
+            $this->orderWorkflowService->ensureCanQuote($quoteOrder);
+        }
+
         $version = $this->resolveDocumentVersion($quoteOrder, $payload['document_type']);
         $status = $this->resolveDocumentStatus($payload['document_type'], $payload);
         $isActive = $this->resolveDocumentActiveFlag($payload['document_type'], $status);
@@ -263,6 +267,10 @@ class BillingService
             'issued_at' => now(),
         ]);
 
+        if (in_array($document->source, ['repair', 'mixed'], true) && $document->document_type === 'invoice') {
+            $this->assertRepairOrdersCanBeClosed($company, $items);
+        }
+
         if ($payload['customer_mode'] === 'walk_in') {
             $items = $this->attachWalkInServiceOrders($company, $actor, $document, $items);
         } else {
@@ -285,12 +293,6 @@ class BillingService
         }
 
         if (in_array($document->source, ['repair', 'mixed'], true) && $document->document_type === 'invoice' && isset($payload['repair_outcome'])) {
-            $repairOrder = $this->resolveSingleRepairOrder($document);
-
-            if ($repairOrder) {
-                $this->orderWorkflowValidator->ensureCanRepair($repairOrder);
-            }
-
             $this->repairOutcomeService->closeFromBillingDocument($document, $payload);
         }
 
@@ -384,6 +386,24 @@ class BillingService
         $order = $orders->first();
 
         return $order;
+    }
+
+    private function assertRepairOrdersCanBeClosed(Company $company, array $items): void
+    {
+        $orderIds = collect($items)
+            ->filter(fn (array $item): bool => $item['item_kind'] === 'service' && ! empty($item['order_id']))
+            ->pluck('order_id')
+            ->unique();
+
+        foreach ($orderIds as $orderId) {
+            $order = Order::query()
+                ->where('company_id', $company->id)
+                ->find($orderId);
+
+            if ($order) {
+                $this->orderWorkflowService->ensureCanRepair($order);
+            }
+        }
     }
 
     private function consumeInventoryForInvoice(Company $company, array $items, User $actor): void

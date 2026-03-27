@@ -87,16 +87,33 @@ class BillingDocument extends Model
         return app(BillingService::class)->createNewQuoteVersion($this, $actor, $payload);
     }
 
-    public function approveQuote(?string $approvedBy = 'customer', string $approvalChannel = 'system'): self
+    public function markAsSent(): self
+    {
+        if (! $this->isQuote()) {
+            throw QuoteVersionException::onlyQuotesCanBeSent();
+        }
+
+        $this->ensureCurrentQuoteContext();
+
+        DB::transaction(function (): void {
+            $this->forceFill([
+                'status' => 'sent',
+                'is_active' => true,
+            ])->save();
+
+            $this->deactivateOtherVersions();
+        });
+
+        return $this->refresh();
+    }
+
+    public function approve(?string $approvedBy = 'customer', string $approvalChannel = 'system'): self
     {
         if (! $this->isQuote()) {
             throw QuoteVersionException::onlyQuotesCanBeApproved();
         }
 
-        $order = $this->order;
-        if (! $order) {
-            throw QuoteVersionException::quoteRequiresSingleOrder();
-        }
+        $order = $this->ensureCurrentQuoteContext();
 
         DB::transaction(function () use ($order, $approvedBy, $approvalChannel): void {
             $this->forceFill([
@@ -104,11 +121,7 @@ class BillingDocument extends Model
                 'is_active' => true,
             ])->save();
 
-            $this->newQuery()
-                ->where('order_id', $order->id)
-                ->where('document_type', 'quote')
-                ->whereKeyNot($this->getKey())
-                ->update(['is_active' => false]);
+            $this->deactivateOtherVersions();
 
             $order->approve($approvedBy, $approvalChannel);
         });
@@ -116,11 +129,13 @@ class BillingDocument extends Model
         return $this->refresh();
     }
 
-    public function rejectQuote(): self
+    public function reject(): self
     {
         if (! $this->isQuote()) {
             throw QuoteVersionException::onlyQuotesCanBeRejected();
         }
+
+        $this->ensureCurrentQuoteContext();
 
         $this->forceFill([
             'status' => 'rejected',
@@ -128,6 +143,16 @@ class BillingDocument extends Model
         ])->save();
 
         return $this->refresh();
+    }
+
+    public function approveQuote(?string $approvedBy = 'customer', string $approvalChannel = 'system'): self
+    {
+        return $this->approve($approvedBy, $approvalChannel);
+    }
+
+    public function rejectQuote(): self
+    {
+        return $this->reject();
     }
 
     public function isQuote(): bool
@@ -142,5 +167,25 @@ class BillingDocument extends Model
         }
 
         return $this->customer?->name ?: 'Cliente no disponible';
+    }
+
+    private function ensureCurrentQuoteContext(): Order
+    {
+        $order = $this->order;
+
+        if (! $order) {
+            throw QuoteVersionException::quoteRequiresSingleOrder();
+        }
+
+        return $order;
+    }
+
+    private function deactivateOtherVersions(): void
+    {
+        $this->newQuery()
+            ->where('order_id', $this->order_id)
+            ->where('document_type', 'quote')
+            ->whereKeyNot($this->getKey())
+            ->update(['is_active' => false]);
     }
 }
