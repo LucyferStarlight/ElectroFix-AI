@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
+use App\Actions\ConfirmDiagnosisAction;
 use App\Models\BillingDocument;
 use App\Models\Company;
 use App\Models\Order;
@@ -10,10 +13,14 @@ use App\Models\User;
 use App\Services\Exceptions\OutcomeNotFoundException;
 use App\Services\Exceptions\RepairOutcomeAlreadyClosedException;
 use App\Support\OrderStatus;
+use Throwable;
 
 class RepairOutcomeService
 {
-    public function __construct(private readonly OrderStateMachine $orderStateMachine) {}
+    public function __construct(
+        private readonly OrderStateMachine $orderStateMachine,
+        private readonly ConfirmDiagnosisAction $confirmDiagnosisAction
+    ) {}
 
     public function closeFromBillingDocument(BillingDocument $doc, array $data): OrderRepairOutcome
     {
@@ -37,6 +44,18 @@ class RepairOutcomeService
         $company = $doc->company;
         $planAtClose = (string) ($company->subscription?->plan ?? 'starter');
         $hadAiDiagnosis = $order->ai_diagnosed_at !== null;
+        $latestDiagnostic = $order->latestDiagnostic;
+        $aiDiagnosis = $latestDiagnostic ? [
+            'summary' => $latestDiagnostic->diagnostic_summary,
+            'failure_type' => $latestDiagnostic->failure_type,
+            'possible_causes' => $latestDiagnostic->possible_causes ?? [],
+            'recommended_actions' => $latestDiagnostic->recommended_actions ?? [],
+            'confidence_score' => $latestDiagnostic->confidence_score !== null
+                ? (float) $latestDiagnostic->confidence_score
+                : null,
+            'provider' => $latestDiagnostic->provider,
+            'model' => $latestDiagnostic->model,
+        ] : null;
 
         return OrderRepairOutcome::query()->create([
             'order_id' => $order->id,
@@ -48,6 +67,13 @@ class RepairOutcomeService
             'actual_amount_charged' => (float) $data['actual_amount_charged'],
             'aris_estimated_cost' => $this->resolveAiEstimatedCost($order),
             'had_ai_diagnosis' => $hadAiDiagnosis,
+            'ai_diagnosis' => $aiDiagnosis,
+            'real_diagnosis' => null,
+            'repair_applied' => (string) $data['work_performed'],
+            'confidence_score' => $latestDiagnostic?->confidence_score !== null
+                ? (float) $latestDiagnostic->confidence_score
+                : null,
+            'validated' => false,
             'feeds_aris_training' => $this->shouldFeedAiDataset($order, $company),
             'plan_at_close' => $planAtClose,
         ]);
@@ -67,13 +93,25 @@ class RepairOutcomeService
             abort(403, 'No puedes marcar entrega de órdenes de otra empresa.');
         }
 
+        // Compatibilidad operativa: algunas órdenes pueden seguir en "approved"
+        // al momento de entrega. Si es posible, se normaliza primero a "completed".
+        if ((string) $order->status !== OrderStatus::COMPLETED) {
+            try {
+                if ($this->orderStateMachine->canTransition($order->status, OrderStatus::COMPLETED)) {
+                    $order = $this->orderStateMachine->transition($order, OrderStatus::COMPLETED);
+                }
+            } catch (Throwable) {
+                // Si no puede normalizar a completed, se intenta transición directa a delivered.
+            }
+        }
+
+        $this->orderStateMachine->transition($order, OrderStatus::DELIVERED);
+
         if (! $outcome->delivered_at) {
             $outcome->update([
                 'delivered_at' => now(),
             ]);
         }
-
-        $this->orderStateMachine->transition($order, OrderStatus::DELIVERED);
 
         return $outcome->fresh();
     }
@@ -85,10 +123,17 @@ class RepairOutcomeService
             throw new OutcomeNotFoundException('No existe cierre de reparación para esta orden.');
         }
 
+        $diagnosisPayload = $this->confirmDiagnosisAction->execute($order, $outcome, $data);
+
         $outcome->update([
             'diagnostic_accuracy' => $data['diagnostic_accuracy'],
             'technician_notes' => $data['technician_notes'] ?? null,
             'actual_causes' => $data['actual_causes'] ?? null,
+            'ai_diagnosis' => $diagnosisPayload['ai_diagnosis'],
+            'real_diagnosis' => $diagnosisPayload['real_diagnosis'],
+            'repair_applied' => $diagnosisPayload['repair_applied'],
+            'confidence_score' => $diagnosisPayload['confidence_score'],
+            'validated' => $diagnosisPayload['validated'],
         ]);
 
         return $outcome->fresh();

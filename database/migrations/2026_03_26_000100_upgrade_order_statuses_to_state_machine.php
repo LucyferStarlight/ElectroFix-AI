@@ -7,7 +7,30 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::transaction(function (): void {
+        $runner = function (): void {
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("
+                    ALTER TABLE orders
+                    MODIFY status ENUM(
+                        'received',
+                        'diagnostic',
+                        'repairing',
+                        'quote',
+                        'ready',
+                        'delivered',
+                        'not_repaired',
+                        'created',
+                        'diagnosing',
+                        'quoted',
+                        'approved',
+                        'in_repair',
+                        'completed',
+                        'closed',
+                        'canceled'
+                    ) NOT NULL DEFAULT 'created'
+                ");
+            }
+
             $this->migrateStatuses([
                 'received' => 'created',
                 'diagnostic' => 'diagnosing',
@@ -33,12 +56,43 @@ return new class extends Migration
                     ) NOT NULL DEFAULT 'created'
                 ");
             }
-        });
+        };
+
+        if (DB::getDriverName() === 'mysql') {
+            $runner();
+
+            return;
+        }
+
+        DB::transaction($runner);
     }
 
     public function down(): void
     {
-        DB::transaction(function (): void {
+        $runner = function (): void {
+            if (DB::getDriverName() === 'mysql') {
+                DB::statement("
+                    ALTER TABLE orders
+                    MODIFY status ENUM(
+                        'received',
+                        'diagnostic',
+                        'repairing',
+                        'quote',
+                        'ready',
+                        'delivered',
+                        'not_repaired',
+                        'created',
+                        'diagnosing',
+                        'quoted',
+                        'approved',
+                        'in_repair',
+                        'completed',
+                        'closed',
+                        'canceled'
+                    ) NOT NULL DEFAULT 'received'
+                ");
+            }
+
             $this->migrateStatuses([
                 'created' => 'received',
                 'diagnosing' => 'diagnostic',
@@ -64,7 +118,15 @@ return new class extends Migration
                     ) NOT NULL DEFAULT 'received'
                 ");
             }
-        });
+        };
+
+        if (DB::getDriverName() === 'mysql') {
+            $runner();
+
+            return;
+        }
+
+        DB::transaction($runner);
     }
 
     private function migrateStatuses(array $map): void

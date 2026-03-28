@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +26,11 @@ class OrderRepairOutcome extends Model
         'diagnostic_accuracy',
         'technician_notes',
         'actual_causes',
+        'ai_diagnosis',
+        'real_diagnosis',
+        'repair_applied',
+        'confidence_score',
+        'validated',
         'feeds_aris_training',
         'plan_at_close',
         'delivered_at',
@@ -37,6 +44,10 @@ class OrderRepairOutcome extends Model
             'aris_estimated_cost' => 'decimal:2',
             'had_ai_diagnosis' => 'boolean',
             'actual_causes' => 'array',
+            'ai_diagnosis' => 'array',
+            'real_diagnosis' => 'array',
+            'confidence_score' => 'decimal:2',
+            'validated' => 'boolean',
             'feeds_aris_training' => 'boolean',
             'delivered_at' => 'datetime',
         ];
