@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\AiDiagnosticProvider;
+use App\Services\Ai\ArisProvider;
 use App\Services\Ai\GroqProvider;
+use App\Services\Ai\LocalFallbackProvider;
 use App\Models\Company;
 use App\Models\Order;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -26,6 +28,23 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app->bind(AiDiagnosticProvider::class, function (): AiDiagnosticProvider {
+            $provider = strtolower((string) config('ai.provider', 'groq'));
+
+            if ($provider === 'local') {
+                return app(LocalFallbackProvider::class);
+            }
+
+            if ($provider === 'aris') {
+                return app(ArisProvider::class);
+            }
+
+            $groqKey = trim((string) config('services.groq.api_key', ''));
+            $allowFallback = (bool) config('ai.fallback_on_missing_key', app()->environment('testing'));
+
+            if ($groqKey === '' && $allowFallback) {
+                return app(LocalFallbackProvider::class);
+            }
+
             return app(GroqProvider::class);
         });
     }

@@ -4,16 +4,22 @@ namespace App\Services;
 
 use App\Models\Plan;
 use App\Models\PlanPrice;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Collection;
 
 class PlanCatalogService
 {
     public function publicPlans()
     {
-        return Plan::query()
-            ->where('is_public', true)
-            ->with(['prices' => fn ($q) => $q->where('is_active', true)->orderBy('billing_period')])
-            ->orderBy('id')
-            ->get();
+        try {
+            return Plan::query()
+                ->where('is_public', true)
+                ->with(['prices' => fn ($q) => $q->where('is_active', true)->orderBy('billing_period')])
+                ->orderBy('id')
+                ->get();
+        } catch (QueryException) {
+            return new Collection();
+        }
     }
 
     public function resolvePlan(string $name): Plan

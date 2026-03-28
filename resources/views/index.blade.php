@@ -460,6 +460,12 @@
             </div>
         </div>
 
+        @if (count($plans) === 0)
+            <div class="alert alert-info text-center" role="alert">
+                Planes no disponibles
+            </div>
+        @endif
+
         <div class="row g-4">
             @foreach ($plans as $key => $plan)
                 @php

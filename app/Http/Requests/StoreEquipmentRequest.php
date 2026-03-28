@@ -23,6 +23,24 @@ class StoreEquipmentRequest extends FormRequest
         ];
     }
 
+    protected function prepareForValidation(): void
+    {
+        $customerMode = $this->input('customer_mode');
+        $customerId = $this->input('customer_id');
+
+        if (($customerMode === null || $customerMode === '') && $customerId !== null && $customerId !== '') {
+            $customerMode = 'registered';
+        }
+
+        $this->merge([
+            'customer_mode' => $customerMode,
+            'type' => $this->input('type') !== null ? trim(strip_tags((string) $this->input('type'))) : null,
+            'brand' => $this->input('brand') !== null ? trim(strip_tags((string) $this->input('brand'))) : null,
+            'model' => $this->input('model') !== null ? trim(strip_tags((string) $this->input('model'))) : null,
+            'serial_number' => $this->input('serial_number') !== null ? trim(strip_tags((string) $this->input('serial_number'))) : null,
+        ]);
+    }
+
     public function messages(): array
     {
         return [
