@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\User;
-use App\Services\AiDiagnosticService;
+use App\Services\DiagnosisService;
 use App\Services\Exceptions\AiQuotaExceededException;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,10 +34,10 @@ class ProcessAiDiagnosticJob implements ShouldQueue
     ) {
     }
 
-    public function handle(AiDiagnosticService $aiDiagnosticService): void
+    public function handle(DiagnosisService $diagnosisService): void
     {
         try {
-            $aiDiagnosticService->diagnose($this->order, $this->company, $this->actor, $this->symptoms);
+            $diagnosisService->run($this->order, $this->company, $this->actor, $this->symptoms);
 
             $this->order->update([
                 'ai_diagnosis_pending' => false,

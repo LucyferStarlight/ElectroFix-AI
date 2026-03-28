@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers;
 
 use App\Contracts\AiDiagnosticProvider;
@@ -58,6 +60,13 @@ class AppServiceProvider extends ServiceProvider
             $key = $companyId ? 'company:'.$companyId : 'company:guest';
 
             return Limit::perMinute(10)->by($key);
+        });
+
+        RateLimiter::for('ai-similar-cases', function (Request $request): Limit {
+            $companyId = $request->user()?->company_id;
+            $key = $companyId ? 'company:'.$companyId : 'ip:'.$request->ip();
+
+            return Limit::perMinute(30)->by($key);
         });
     }
 }

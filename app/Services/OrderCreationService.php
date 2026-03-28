@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\Customer;
@@ -13,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 class OrderCreationService
 {
     public function __construct(
-        private readonly AiDiagnosticService $aiDiagnosticService,
+        private readonly DiagnosisService $diagnosisService,
         private readonly TechnicianAssignmentService $technicianAssignmentService
     ) {}
 
@@ -71,7 +73,7 @@ class OrderCreationService
             $company = $order->company()->with('subscription.planModel')->firstOrFail();
             $symptoms = (string) ($payload['symptoms'] ?? '');
             try {
-                $this->aiDiagnosticService->diagnose($order, $company, $actor, $symptoms);
+                $this->diagnosisService->run($order, $company, $actor, $symptoms);
             } catch (AiQuotaExceededException $exception) {
                 return [
                     'order' => $order,

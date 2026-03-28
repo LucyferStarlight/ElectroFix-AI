@@ -1,10 +1,11 @@
 <?php
 
-use App\Observability\ObservabilityLogger;
+declare(strict_types=1);
+
+use App\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -36,27 +37,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (Throwable $exception): void {
-            /** @var ObservabilityLogger $observability */
-            $observability = app(ObservabilityLogger::class);
-            $request = app()->bound('request') ? request() : null;
-
-            $statusCode = $exception instanceof HttpExceptionInterface
-                ? $exception->getStatusCode()
-                : 500;
-
-            $context = [
-                'category' => 'errors',
-                'status_code' => $statusCode,
-                'path' => $request?->path(),
-                'method' => $request?->method(),
-            ];
-
-            if ($statusCode >= 500) {
-                $observability->critical('app.unhandled_exception', $exception, $context);
-
-                return;
-            }
-
-            $observability->error('app.request_exception', $exception, $context);
+            app(ExceptionHandler::class)->report($exception);
         });
     })->create();

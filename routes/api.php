@@ -42,7 +42,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/orders/{order}/diagnostics/latest', [OrderApiController::class, 'showLatestDiagnostic'])
             ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::post('/orders/diagnostics/similar', [OrderApiController::class, 'similarCases'])
-            ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
+            ->middleware(['token_ability:'.ApiAbility::ORDERS_READ, 'throttle:ai-similar-cases']);
         Route::get('/orders/diagnostics/insights', [OrderApiController::class, 'diagnosticInsights'])
             ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::patch('/orders/{order}/repair-outcome/feedback', [RepairOutcomeApiController::class, 'update'])

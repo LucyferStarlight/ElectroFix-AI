@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
 use App\Support\OrderStatus;
@@ -25,5 +27,18 @@ class StoreOrderRequest extends FormRequest
             'status' => ['nullable', Rule::in(OrderStatus::acceptedValues())],
             'estimated_cost' => ['nullable', 'numeric', 'min:0'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $symptoms = $this->input('symptoms');
+        $technician = $this->input('technician');
+
+        $this->merge([
+            'customer_id' => filter_var($this->input('customer_id'), FILTER_VALIDATE_INT) ?: $this->input('customer_id'),
+            'equipment_id' => filter_var($this->input('equipment_id'), FILTER_VALIDATE_INT) ?: $this->input('equipment_id'),
+            'technician' => $technician !== null ? trim(strip_tags((string) $technician)) : null,
+            'symptoms' => $symptoms !== null ? trim(strip_tags((string) $symptoms)) : null,
+        ]);
     }
 }

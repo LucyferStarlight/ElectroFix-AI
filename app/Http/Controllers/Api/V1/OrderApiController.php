@@ -1,13 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\ApiResponse;
 use App\Http\Controllers\Api\V1\Concerns\InteractsWithCompanyScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ApproveOrderRequest;
+use App\Http\Requests\IndexDiagnosticInsightsRequest;
 use App\Http\Requests\RejectOrderRequest;
 use App\Http\Requests\StoreOrderRequest;
+use App\Http\Requests\StoreOrderDiagnosticRequest;
+use App\Http\Requests\StoreSimilarCasesRequest;
 use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Http\Resources\Api\V1\OrderDiagnosticResource;
 use App\Http\Resources\Api\V1\OrderResource;
@@ -146,10 +151,26 @@ class OrderApiController extends Controller
         return $this->successResource(new OrderResource($order->fresh(['customer', 'equipment', 'technicianProfile'])));
     }
 
-    public function storeDiagnostic(Request $request, Order $order, OrderWorkflowService $orderWorkflowService)
+    public function storeDiagnostic(
+        StoreOrderDiagnosticRequest $request,
+        Order $order,
+        OrderWorkflowService $orderWorkflowService
+    )
     {
         $this->assertCompanyAccess($request, $order->company_id);
         $order->loadMissing('equipment', 'company.subscription.planModel');
+
+        if ($order->ai_diagnosed_at) {
+            return response()->json([
+                'ok' => false,
+                'data' => null,
+                'meta' => [],
+                'error' => [
+                    'code' => 'DIAGNOSTIC_ALREADY_EXISTS',
+                    'message' => 'Esta orden ya cuenta con un diagnóstico IA.',
+                ],
+            ], 422);
+        }
 
         try {
             $orderWorkflowService->ensureCanDiagnose($order);
@@ -165,24 +186,8 @@ class OrderApiController extends Controller
             ], 422);
         }
 
-        if ($order->ai_diagnosed_at) {
-            return response()->json([
-                'ok' => false,
-                'data' => null,
-                'meta' => [],
-                'error' => [
-                    'code' => 'DIAGNOSTIC_ALREADY_EXISTS',
-                    'message' => 'Esta orden ya cuenta con un diagnóstico IA.',
-                ],
-            ], 422);
-        }
-
-        $data = $request->validate([
-            'symptoms' => ['required', 'string', 'min:5', 'max:600'],
-        ]);
-
         $company = $order->company;
-        $symptoms = (string) $data['symptoms'];
+        $symptoms = (string) $request->validated('symptoms');
         $order->update(['ai_diagnosis_pending' => true, 'ai_diagnosis_error' => null]);
         ProcessAiDiagnosticJob::dispatch($order, $company, $request->user(), $symptoms);
 
@@ -235,15 +240,9 @@ class OrderApiController extends Controller
         ], 404);
     }
 
-    public function similarCases(Request $request, DiagnosticCaseSearchService $diagnosticCaseSearchService)
+    public function similarCases(StoreSimilarCasesRequest $request, DiagnosticCaseSearchService $diagnosticCaseSearchService)
     {
-        $data = $request->validate([
-            'symptoms' => ['required', 'string', 'min:5', 'max:600'],
-            'equipment_id' => ['nullable', 'integer'],
-            'equipment_type' => ['nullable', 'string', 'max:120'],
-            'customer_id' => ['nullable', 'integer'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:25'],
-        ]);
+        $data = $request->validated();
 
         $companyId = $request->user()?->company_id;
         $context = [
@@ -276,11 +275,12 @@ class OrderApiController extends Controller
         return $this->success($results);
     }
 
-    public function diagnosticInsights(Request $request, DiagnosticCaseSearchService $diagnosticCaseSearchService)
+    public function diagnosticInsights(
+        IndexDiagnosticInsightsRequest $request,
+        DiagnosticCaseSearchService $diagnosticCaseSearchService
+    )
     {
-        $data = $request->validate([
-            'limit' => ['nullable', 'integer', 'min:1', 'max:25'],
-        ]);
+        $data = $request->validated();
 
         $companyId = $request->user()?->company_id;
         $limit = (int) ($data['limit'] ?? 10);

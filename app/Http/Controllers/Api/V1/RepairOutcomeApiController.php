@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\V1\Concerns\ApiResponse;
@@ -8,7 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateRepairOutcomeFeedbackRequest;
 use App\Models\Order;
 use App\Services\Exceptions\OutcomeNotFoundException;
-use App\Services\RepairOutcomeService;
+use App\Services\RepairService;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class RepairOutcomeApiController extends Controller
@@ -16,7 +18,7 @@ class RepairOutcomeApiController extends Controller
     use ApiResponse;
     use InteractsWithCompanyScope;
 
-    public function __construct(private readonly RepairOutcomeService $repairOutcomeService)
+    public function __construct(private readonly RepairService $repairService)
     {
     }
 
@@ -25,7 +27,7 @@ class RepairOutcomeApiController extends Controller
         $this->assertCompanyAccess($request, $order->company_id);
 
         try {
-            $outcome = $this->repairOutcomeService->updateFeedback($order, $request->validated());
+            $outcome = $this->repairService->updateFeedback($order, $request->validated());
         } catch (OutcomeNotFoundException $exception) {
             return response()->json([
                 'ok' => false,

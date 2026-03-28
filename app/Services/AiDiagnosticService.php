@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-use App\Contracts\AiDiagnosticProvider;
 use App\DTOs\AiDiagnosticResult;
 use App\Models\Company;
 use App\Models\Order;
@@ -17,7 +18,7 @@ class AiDiagnosticService
     private const DEFAULT_PLAN = 'starter';
 
     public function __construct(
-        private readonly AiDiagnosticProvider $provider,
+        private readonly AIService $aiService,
         private readonly AiUsageService $aiUsageService,
         private readonly AiTokenEstimator $tokenEstimator,
         private readonly OrderDiagnosticService $orderDiagnosticService
@@ -30,7 +31,7 @@ class AiDiagnosticService
             throw new AiQuotaExceededException('already_diagnosed', 'Esta orden ya cuenta con un diagnóstico IA.');
         }
 
-        $symptoms = trim($symptoms);
+        $symptoms = $this->aiService->sanitizeSymptoms($symptoms);
         if (mb_strlen($symptoms) > 600) {
             throw new AiQuotaExceededException('invalid_symptoms', 'Los síntomas no pueden exceder 600 caracteres.');
         }
@@ -60,7 +61,7 @@ class AiDiagnosticService
         }
 
         try {
-            $result = $this->provider->diagnose($symptoms, $deviceInfo);
+            $result = $this->aiService->diagnose($symptoms, $deviceInfo);
         } catch (AiProviderException $exception) {
             Log::channel('ai')->warning('AI provider failed', [
                 'company_id' => $company->id,
