@@ -28,6 +28,7 @@ jobs:
         run: |
           cp .env.testing .env
           php artisan key:generate --ansi
+          php artisan optimize:clear
 
       - name: Run migrations
         run: php artisan migrate --force
@@ -48,6 +49,12 @@ jobs:
         with:
           php-version: "8.2"
           extensions: mbstring, pdo, pdo_sqlite, sqlite3
+
+      - name: Prepare app
+        run: |
+          cp .env.production.example .env
+          php artisan key:generate --ansi
+          php artisan optimize:clear
 
       - name: Build artifact
         run: |
