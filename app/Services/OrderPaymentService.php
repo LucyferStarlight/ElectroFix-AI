@@ -8,7 +8,6 @@ use App\Observability\ObservabilityLogger;
 use App\Services\Exceptions\OrderPaymentException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 class OrderPaymentService
 {
@@ -66,7 +65,7 @@ class OrderPaymentService
                     'status' => 'succeeded',
                 ]));
             });
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->observability->critical('payments.sync.failed', $exception, $context);
 
             throw $exception;
@@ -154,7 +153,7 @@ class OrderPaymentService
                     'status' => 'succeeded',
                 ]));
             });
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->observability->critical('payments.sync.failed', $exception, $context);
 
             throw $exception;
@@ -219,7 +218,7 @@ class OrderPaymentService
                 'source' => 'stripe',
                 'status' => 'refunded',
             ]));
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->observability->critical('payments.refund.failed', $exception, $context);
 
             throw $exception;
@@ -293,7 +292,7 @@ class OrderPaymentService
                     'failure_code' => (string) Arr::get($object, 'last_payment_error.code', ''),
                 ]));
             });
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->observability->critical('payments.attempt.failed_unexpected', $exception, $context);
 
             throw $exception;

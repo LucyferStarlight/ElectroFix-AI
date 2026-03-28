@@ -4,7 +4,6 @@ namespace App\Observability;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class ObservabilityLogger
 {
@@ -18,12 +17,12 @@ class ObservabilityLogger
         $this->write('info', $event, array_merge(['category' => 'state_changes'], $context));
     }
 
-    public function error(string $event, Throwable $exception, array $context = []): void
+    public function error(string $event, \Throwable $exception, array $context = []): void
     {
         $this->write('error', $event, $this->withException($exception, $context));
     }
 
-    public function critical(string $event, Throwable $exception, array $context = []): void
+    public function critical(string $event, \Throwable $exception, array $context = []): void
     {
         $this->write('critical', $event, $this->withException($exception, $context));
     }
@@ -66,7 +65,7 @@ class ObservabilityLogger
         ];
     }
 
-    private function withException(Throwable $exception, array $context): array
+    private function withException(\Throwable $exception, array $context): array
     {
         return array_merge($context, [
             'category' => $context['category'] ?? 'errors',

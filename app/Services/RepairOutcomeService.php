@@ -13,7 +13,6 @@ use App\Models\User;
 use App\Services\Exceptions\OutcomeNotFoundException;
 use App\Services\Exceptions\RepairOutcomeAlreadyClosedException;
 use App\Support\OrderStatus;
-use Throwable;
 
 class RepairOutcomeService
 {
@@ -100,7 +99,7 @@ class RepairOutcomeService
                 if ($this->orderStateMachine->canTransition($order->status, OrderStatus::COMPLETED)) {
                     $order = $this->orderStateMachine->transition($order, OrderStatus::COMPLETED);
                 }
-            } catch (Throwable) {
+            } catch (\Throwable) {
                 // Si no puede normalizar a completed, se intenta transición directa a delivered.
             }
         }

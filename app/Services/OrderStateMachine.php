@@ -8,7 +8,6 @@ use App\Observability\ObservabilityLogger;
 use App\Services\Exceptions\InvalidOrderStatusTransitionException;
 use App\Services\Exceptions\OrderWorkflowException;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 class OrderStateMachine
 {
@@ -79,7 +78,7 @@ class OrderStateMachine
 
                 return $lockedOrder;
             });
-        } catch (Throwable $exception) {
+        } catch (\Throwable $exception) {
             $this->observability->error('orders.status.transition_failed', $exception, [
                 'action' => 'orders.status.transition',
                 'order_id' => $order->id,

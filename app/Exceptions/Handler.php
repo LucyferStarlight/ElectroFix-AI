@@ -8,13 +8,12 @@ use App\Observability\ObservabilityLogger;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Throwable;
 
 class Handler
 {
     public function __construct(private readonly ObservabilityLogger $observability) {}
 
-    public function report(Throwable $exception): void
+    public function report(\Throwable $exception): void
     {
         $request = app()->bound('request') ? request() : null;
         $statusCode = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
