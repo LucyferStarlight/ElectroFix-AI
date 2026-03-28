@@ -46,7 +46,7 @@ class OrderStatusTransitionTest extends TestCase
         $this->assertSame(OrderStatus::CREATED, $order->fresh()->status);
     }
 
-    public function test_api_accepts_valid_transition_with_legacy_input(): void
+    public function test_api_accepts_valid_transition_with_standard_status_values(): void
     {
         [$company, $admin] = $this->createCompanyWithRoles();
         $this->createActiveSubscription($company);
@@ -61,13 +61,13 @@ class OrderStatusTransitionTest extends TestCase
             'company_id' => $company->id,
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
-            'status' => 'received',
+            'status' => OrderStatus::CREATED,
         ]);
 
         Sanctum::actingAs($admin, [ApiAbility::ORDERS_WRITE]);
 
         $response = $this->patchJson('/api/v1/orders/'.$order->id.'/status', [
-            'status' => 'diagnostic',
+            'status' => OrderStatus::DIAGNOSING,
         ]);
 
         $response->assertOk();

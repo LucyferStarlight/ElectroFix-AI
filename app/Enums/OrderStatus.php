@@ -41,22 +41,7 @@ enum OrderStatus: string
 
     public static function acceptedValues(): array
     {
-        return array_values(array_unique([
-            ...self::values(),
-            ...array_keys(self::legacyMap()),
-        ]));
-    }
-
-    public static function legacyMap(): array
-    {
-        return [
-            'received' => self::CREATED,
-            'diagnostic' => self::DIAGNOSING,
-            'quote' => self::QUOTED,
-            'repairing' => self::IN_REPAIR,
-            'ready' => self::COMPLETED,
-            'not_repaired' => self::CANCELED,
-        ];
+        return self::values();
     }
 
     public static function tryFromInput(self|string|null $value): ?self
@@ -71,9 +56,7 @@ enum OrderStatus: string
 
         $normalized = strtolower(trim($value));
 
-        return self::tryFrom($normalized)
-            ?? self::legacyMap()[$normalized]
-            ?? null;
+        return self::tryFrom($normalized);
     }
 
     public static function fromInput(self|string $value): self

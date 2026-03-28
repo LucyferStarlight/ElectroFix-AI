@@ -90,7 +90,7 @@ class OrderAiQuotaTest extends TestCase
             'customer_id' => $customer->id,
             'equipment_id' => $equipment->id,
             'symptoms' => 'No enciende desde ayer',
-            'status' => 'received',
+            'status' => 'created',
             'estimated_cost' => 1200,
             'request_ai_diagnosis' => true,
             'technician_profile_id' => $technician->id,

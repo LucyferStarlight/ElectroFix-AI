@@ -24,18 +24,6 @@ class OrderStatus
 
     public const CANCELED = OrderStatusEnum::CANCELED->value;
 
-    public const RECEIVED = self::CREATED;
-
-    public const DIAGNOSTIC = self::DIAGNOSING;
-
-    public const REPAIRING = self::IN_REPAIR;
-
-    public const QUOTE = self::QUOTED;
-
-    public const READY = self::COMPLETED;
-
-    public const NOT_REPAIRED = self::CANCELED;
-
     public static function all(): array
     {
         return OrderStatusEnum::values();

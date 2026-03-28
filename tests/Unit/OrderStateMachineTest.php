@@ -38,13 +38,13 @@ class OrderStateMachineTest extends TestCase
         $this->assertFalse($machine->canTransition(OrderStatus::CREATED, OrderStatus::IN_REPAIR));
     }
 
-    public function test_transition_normalizes_legacy_statuses_before_persisting(): void
+    public function test_transition_persists_standardized_statuses(): void
     {
         $order = $this->createConsistentOrder([
-            'status' => 'received',
+            'status' => OrderStatus::CREATED,
         ]);
 
-        app(OrderStateMachine::class)->transition($order, 'diagnostic');
+        app(OrderStateMachine::class)->transition($order, OrderStatus::DIAGNOSING);
 
         $this->assertSame(OrderStatus::DIAGNOSING, $order->fresh()->status);
     }
