@@ -207,6 +207,29 @@ php artisan optimize
 php artisan migrate --force
 ```
 
+### Hosting Neubox (compatible para 5+ usuarios)
+- Requisitos mínimos:
+  - PHP 8.2+
+  - MySQL 8+ o MariaDB compatible
+  - `APP_ENV=production`
+  - `APP_DEBUG=false`
+- Configuración recomendada en `.env.production.example` para hosting compartido:
+  - `SESSION_DRIVER=file`
+  - `CACHE_STORE=file`
+  - `QUEUE_CONNECTION=sync`
+- Configurar `public_html` para apuntar a `public/` de Laravel (o publicar contenido de `public/` en `public_html` y ajustar rutas correctamente).
+- Permisos:
+  - escritura en `storage/` y `bootstrap/cache/`
+- Ejecutar post-deploy:
+```bash
+php artisan migrate --force
+php artisan storage:link
+php artisan config:cache
+php artisan route:cache
+php artisan optimize
+```
+- Capacidad objetivo validada en esta versión: operación estable para al menos 5 usuarios activos con carga baja-media (CRUD operativo, diagnóstico IA bajo demanda y facturación normal).
+
 ## CI/CD
 Workflow: `.github/workflows/ci-cd.yml`
 - instala dependencias

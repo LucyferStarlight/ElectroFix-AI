@@ -9,3 +9,9 @@ fi
 
 php artisan optimize:clear
 php artisan storage:link
+
+if [[ "${APP_ENV:-}" == "production" ]]; then
+  php artisan config:cache
+  php artisan route:cache
+  php artisan optimize
+fi
