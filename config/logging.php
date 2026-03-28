@@ -1,5 +1,6 @@
 <?php
 
+use App\Logging\CustomizeObservabilityLogger;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -79,6 +80,15 @@ return [
             'level' => env('LOG_LEVEL', 'info'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+        ],
+
+        'observability' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/observability.log'),
+            'level' => env('OBSERVABILITY_LOG_LEVEL', env('LOG_LEVEL', 'info')),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+            'tap' => [CustomizeObservabilityLogger::class],
         ],
 
         'slack' => [

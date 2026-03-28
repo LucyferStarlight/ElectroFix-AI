@@ -155,6 +155,26 @@ php artisan test
 
 Nota: las pruebas usan MySQL con variables `DB_TEST_*` (ver `phpunit.xml` y `.env.testing`).
 
+## Observabilidad
+- Logging estructurado en JSON para:
+  - pagos
+  - errores
+  - cambios de estado de órdenes
+- Canal dedicado: `observability` (`storage/logs/observability.log`)
+- Contexto automático por request:
+  - `order_id`
+  - `user_id`
+  - `action`
+- Manejo global de excepciones en `bootstrap/app.php` con logs críticos para errores `5xx`.
+- Preparado para exportadores externos (sin integración activa) vía variables:
+  - `OBSERVABILITY_EXTERNAL_ENABLED`
+  - `OBSERVABILITY_EXTERNAL_DRIVER`
+  - `OBSERVABILITY_EXTERNAL_ENDPOINT`
+  - `OBSERVABILITY_EXTERNAL_API_KEY`
+  - `OBSERVABILITY_EXTERNAL_TIMEOUT_SECONDS`
+
+Ejemplos de eventos: `docs/observability-examples.md`.
+
 ## Preparación para commit/push
 ```bash
 git add .

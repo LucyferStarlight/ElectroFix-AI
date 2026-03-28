@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Api\V1\Concerns\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Observability\ObservabilityLogger;
 use App\Services\CompanySubscriptionService;
 use App\Services\StripeWebhookService;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,8 @@ class StripeController extends Controller
 
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
-        private readonly StripeWebhookService $stripeWebhookService
+        private readonly StripeWebhookService $stripeWebhookService,
+        private readonly ObservabilityLogger $observability
     ) {
     }
 
@@ -111,6 +113,13 @@ class StripeController extends Controller
                 'event_id' => $eventId,
                 'event_type' => $eventType,
                 'error_message' => mb_substr($exception->getMessage(), 0, 240),
+            ]);
+            $this->observability->critical('payments.webhook.api_failed', $exception, [
+                'category' => 'payments',
+                'action' => 'payments.webhook.api',
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'source' => 'stripe',
             ]);
 
             return response()->json(['ok' => false, 'message' => 'No se pudo procesar el webhook.'], 500);

@@ -8,6 +8,7 @@ use App\Models\PlanPrice;
 use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Observability\ObservabilityLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,8 @@ class StripeWebhookService
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
         private readonly StripeSignupService $stripeSignupService,
-        private readonly OrderPaymentService $orderPaymentService
+        private readonly OrderPaymentService $orderPaymentService,
+        private readonly ObservabilityLogger $observability
     ) {}
 
     public function handle(array $eventPayload): void
@@ -36,12 +38,25 @@ class StripeWebhookService
             'event_id' => $eventId,
             'event_type' => $eventType,
         ]);
+        $this->observability->payment('payments.webhook.received', [
+            'action' => 'payments.webhook.handle',
+            'event_id' => $eventId,
+            'event_type' => $eventType,
+            'source' => 'stripe',
+        ]);
 
         $stored = $this->claimEventForProcessing($eventPayload, $eventId, $eventType);
         if (! $stored) {
             Log::info('Stripe webhook duplicate ignored', [
                 'event_id' => $eventId,
                 'event_type' => $eventType,
+            ]);
+            $this->observability->warning('payments.webhook.duplicate_ignored', [
+                'category' => 'payments',
+                'action' => 'payments.webhook.handle',
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'source' => 'stripe',
             ]);
 
             return;
@@ -88,6 +103,13 @@ class StripeWebhookService
                 'event_type' => $eventType,
                 'status' => in_array($eventType, $trackedEvents, true) ? 'processed' : 'ignored',
             ]);
+            $this->observability->payment('payments.webhook.processed', [
+                'action' => 'payments.webhook.handle',
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'status' => in_array($eventType, $trackedEvents, true) ? 'processed' : 'ignored',
+                'source' => 'stripe',
+            ]);
         } catch (\Throwable $e) {
             $stored->update([
                 'status' => 'error',
@@ -99,6 +121,13 @@ class StripeWebhookService
                 'event_id' => $eventId,
                 'event_type' => $eventType,
                 'error_message' => mb_substr($e->getMessage(), 0, 240),
+            ]);
+            $this->observability->critical('payments.webhook.failed', $e, [
+                'category' => 'payments',
+                'action' => 'payments.webhook.handle',
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'source' => 'stripe',
             ]);
 
             throw $e;
