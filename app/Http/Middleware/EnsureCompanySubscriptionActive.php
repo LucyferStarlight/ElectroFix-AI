@@ -32,8 +32,28 @@ class EnsureCompanySubscriptionActive
         $subscription = $user->company?->subscription;
         $companyStatus = $user->company?->status;
 
+        // If the company record itself is not active, block access immediately.
         if ($companyStatus && $companyStatus !== 'active') {
-            return $next($request);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok'    => false,
+                    'data'  => null,
+                    'meta'  => [],
+                    'error' => [
+                        'code'    => 'COMPANY_INACTIVE',
+                        'message' => 'Tu cuenta ha sido suspendida. Contacta a soporte.',
+                    ],
+                ], 403);
+            }
+
+            if ($user->role === 'admin') {
+                return redirect()->route('account.suspended');
+            }
+
+            auth()->logout();
+            return redirect()->route('login')->withErrors([
+                'email' => 'El acceso ha sido suspendido. Informa a tu empleador.',
+            ]);
         }
 
         if (! $subscription) {

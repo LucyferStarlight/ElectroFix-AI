@@ -41,13 +41,25 @@ class ProcessAiDiagnosticJob implements ShouldQueue
 
             $this->order->update([
                 'ai_diagnosis_pending' => false,
-                'ai_diagnosis_error' => null,
+                'ai_diagnosis_error'   => null,
             ]);
-        } catch (AiQuotaExceededException|\Throwable $exception) {
+        } catch (AiQuotaExceededException $exception) {
+            // Non-recoverable: quota exceeded, already diagnosed, invalid input.
+            // Mark as final error and do not rethrow — no retry needed.
             $this->order->update([
                 'ai_diagnosis_pending' => false,
-                'ai_diagnosis_error' => $exception->getMessage(),
+                'ai_diagnosis_error'   => $exception->getMessage(),
             ]);
+        } catch (\Throwable $exception) {
+            // Potentially transient: provider timeout, network error, etc.
+            // Update the order so the UI reflects the failure, then rethrow
+            // so Laravel can retry according to $tries = 2 / $backoff = 5.
+            $this->order->update([
+                'ai_diagnosis_pending' => false,
+                'ai_diagnosis_error'   => $exception->getMessage(),
+            ]);
+
+            throw $exception;
         }
     }
 }
