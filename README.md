@@ -175,6 +175,46 @@ Nota: las pruebas usan MySQL con variables `DB_TEST_*` (ver `phpunit.xml` y `.en
 
 Ejemplos de eventos: `docs/observability-examples.md`.
 
+## Flujo IA validado (producción)
+- Persistencia de diagnóstico IA en cierre de reparación:
+  - `ai_diagnosis`
+  - `confidence_score`
+- Confirmación humana y diagnóstico real:
+  - `real_diagnosis`
+  - `validated`
+- Reparación aplicada:
+  - `repair_applied`
+- Comparación IA vs realidad (`ai_comparison`) al registrar feedback técnico.
+
+## Seguridad reforzada
+- Sanitización de inputs críticos (`strip_tags` + trimming) en Form Requests.
+- Endpoints IA con throttling:
+  - `ai-diagnostics`
+  - `ai-similar-cases`
+- Manejo centralizado de errores en `App\Exceptions\Handler`:
+  - errores IA
+  - inputs inválidos
+  - errores críticos
+
+## Producción
+Plantilla recomendada: `.env.production.example`
+
+Checklist de despliegue:
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan optimize
+php artisan migrate --force
+```
+
+## CI/CD
+Workflow: `.github/workflows/ci-cd.yml`
+- instala dependencias
+- ejecuta migraciones
+- corre tests con coverage mínimo 70%
+- build de artefacto
+- deploy solo si tests/build pasan
+
 ## Preparación para commit/push
 ```bash
 git add .

@@ -1,0 +1,78 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3, dom, curl
+          coverage: pcov
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare app
+        run: |
+          cp .env.testing .env
+          php artisan key:generate --ansi
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Run tests with coverage gate
+        run: php artisan test --coverage --min=70
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_sqlite, sqlite3
+
+      - name: Build artifact
+        run: |
+          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          php artisan optimize
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy guard
+        run: echo "Deploy can run only after test and build pass."
+
+      - name: Deploy (optional)
+        if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_KEY != '' }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /var/www/electrofix-ai
+            git pull origin main
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+            php artisan migrate --force
+            php artisan optimize
