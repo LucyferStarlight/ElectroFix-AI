@@ -6,6 +6,8 @@ use App\Models\Order;
 use App\Models\OrderPayment;
 use App\Services\Exceptions\OrderPaymentException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class OrderPaymentService
 {
@@ -19,33 +21,38 @@ class OrderPaymentService
             return;
         }
 
-        $order = $this->resolveOrderFromStripePayload($object);
-        if (! $order) {
-            throw OrderPaymentException::stripeOrderReferenceMissing();
-        }
+        DB::transaction(function () use ($object, $paymentIntentId, $amountReceived): void {
+            $existing = OrderPayment::query()
+                ->where('direction', 'payment')
+                ->where('stripe_payment_intent_id', $paymentIntentId)
+                ->lockForUpdate()
+                ->first();
 
-        $existing = OrderPayment::query()
-            ->where('direction', 'payment')
-            ->where('stripe_payment_intent_id', $paymentIntentId)
-            ->first();
+            if ($existing) {
+                return;
+            }
 
-        if ($existing) {
-            return;
-        }
+            $order = $this->resolveLockedOrderFromStripePayload($object);
+            if (! $order) {
+                throw OrderPaymentException::stripeOrderReferenceMissing();
+            }
 
-        $order->registerPayment($this->fromStripeAmount($amountReceived), [
-            'source' => 'stripe',
-            'currency' => (string) ($object['currency'] ?? 'mxn'),
-            'stripe_payment_intent_id' => $paymentIntentId,
-            'stripe_checkout_session_id' => null,
-            'stripe_charge_id' => (string) Arr::get($object, 'latest_charge'),
-            'status' => 'succeeded',
-            'processed_at' => now(),
-            'metadata' => [
-                'stripe_event_type' => 'payment_intent.succeeded',
-                'metadata' => Arr::get($object, 'metadata', []),
-            ],
-        ]);
+            $this->assertStripeAmountIsExpected($order, $amountReceived, (array) Arr::get($object, 'metadata', []));
+
+            $order->registerPayment($this->fromStripeAmount($amountReceived), [
+                'source' => 'stripe',
+                'currency' => (string) ($object['currency'] ?? 'mxn'),
+                'stripe_payment_intent_id' => $paymentIntentId,
+                'stripe_checkout_session_id' => null,
+                'stripe_charge_id' => (string) Arr::get($object, 'latest_charge'),
+                'status' => 'succeeded',
+                'processed_at' => now(),
+                'metadata' => [
+                    'stripe_event_type' => 'payment_intent.succeeded',
+                    'metadata' => Arr::get($object, 'metadata', []),
+                ],
+            ]);
+        });
     }
 
     public function syncStripeCheckoutCompleted(array $payload): void
@@ -68,32 +75,56 @@ class OrderPaymentService
             return;
         }
 
-        $existing = OrderPayment::query()
-            ->where('direction', 'payment')
-            ->where('stripe_checkout_session_id', $sessionId)
-            ->first();
-
-        if ($existing) {
-            return;
-        }
-
         $amountTotal = (int) ($object['amount_total'] ?? 0);
+        $paymentIntentId = (string) ($object['payment_intent'] ?? '');
+
         if ($amountTotal <= 0) {
             return;
         }
 
-        $order->registerPayment($this->fromStripeAmount($amountTotal), [
-            'source' => 'stripe',
-            'currency' => (string) ($object['currency'] ?? 'mxn'),
-            'stripe_payment_intent_id' => (string) ($object['payment_intent'] ?? ''),
-            'stripe_checkout_session_id' => $sessionId,
-            'status' => 'succeeded',
-            'processed_at' => now(),
-            'metadata' => [
-                'stripe_event_type' => 'checkout.session.completed',
-                'metadata' => Arr::get($object, 'metadata', []),
-            ],
-        ]);
+        DB::transaction(function () use ($object, $order, $sessionId, $paymentIntentId, $amountTotal): void {
+            $lockedOrder = Order::query()->lockForUpdate()->find($order->id);
+            if (! $lockedOrder) {
+                throw OrderPaymentException::stripeOrderReferenceMissing();
+            }
+
+            if ($paymentIntentId !== '') {
+                $existingByIntent = OrderPayment::query()
+                    ->where('direction', 'payment')
+                    ->where('stripe_payment_intent_id', $paymentIntentId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($existingByIntent) {
+                    return;
+                }
+            }
+
+            $existingBySession = OrderPayment::query()
+                ->where('direction', 'payment')
+                ->where('stripe_checkout_session_id', $sessionId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingBySession) {
+                return;
+            }
+
+            $this->assertStripeAmountIsExpected($lockedOrder, $amountTotal, (array) Arr::get($object, 'metadata', []));
+
+            $lockedOrder->registerPayment($this->fromStripeAmount($amountTotal), [
+                'source' => 'stripe',
+                'currency' => (string) ($object['currency'] ?? 'mxn'),
+                'stripe_payment_intent_id' => $paymentIntentId,
+                'stripe_checkout_session_id' => $sessionId,
+                'status' => 'succeeded',
+                'processed_at' => now(),
+                'metadata' => [
+                    'stripe_event_type' => 'checkout.session.completed',
+                    'metadata' => Arr::get($object, 'metadata', []),
+                ],
+            ]);
+        });
     }
 
     public function syncStripeChargeRefunded(array $payload): void
@@ -145,6 +176,73 @@ class OrderPaymentService
         ]);
     }
 
+    public function syncStripePaymentIntentFailed(array $payload): void
+    {
+        $object = (array) Arr::get($payload, 'data.object', []);
+        $paymentIntentId = (string) ($object['id'] ?? '');
+        $amountAttempted = (int) ($object['amount_received'] ?? $object['amount'] ?? 0);
+
+        if ($paymentIntentId === '') {
+            return;
+        }
+
+        DB::transaction(function () use ($object, $paymentIntentId, $amountAttempted): void {
+            $order = $this->resolveLockedOrderFromStripePayload($object);
+            if (! $order) {
+                throw OrderPaymentException::stripeOrderReferenceMissing();
+            }
+
+            $alreadySucceeded = OrderPayment::query()
+                ->where('direction', 'payment')
+                ->where('stripe_payment_intent_id', $paymentIntentId)
+                ->lockForUpdate()
+                ->exists();
+
+            if ($alreadySucceeded) {
+                return;
+            }
+
+            $alreadyFailed = OrderPayment::query()
+                ->where('direction', 'attempt')
+                ->where('stripe_payment_intent_id', $paymentIntentId)
+                ->where('status', 'failed')
+                ->lockForUpdate()
+                ->exists();
+
+            if ($alreadyFailed) {
+                return;
+            }
+
+            $order->payments()->create([
+                'billing_document_id' => null,
+                'direction' => 'attempt',
+                'amount' => $amountAttempted > 0 ? $this->fromStripeAmount($amountAttempted) : 0,
+                'currency' => strtolower((string) ($object['currency'] ?? 'mxn')),
+                'source' => 'stripe',
+                'stripe_payment_intent_id' => $paymentIntentId,
+                'stripe_checkout_session_id' => null,
+                'stripe_charge_id' => (string) Arr::get($object, 'latest_charge'),
+                'stripe_refund_id' => null,
+                'status' => 'failed',
+                'metadata' => [
+                    'stripe_event_type' => 'payment_intent.payment_failed',
+                    'failure_code' => (string) Arr::get($object, 'last_payment_error.code', ''),
+                    'failure_message' => (string) Arr::get($object, 'last_payment_error.message', ''),
+                    'metadata' => Arr::get($object, 'metadata', []),
+                ],
+                'processed_at' => now(),
+            ]);
+
+            $order->refreshPaymentTotals();
+
+            Log::warning('Stripe payment intent failed for order', [
+                'order_id' => $order->id,
+                'stripe_payment_intent_id' => $paymentIntentId,
+                'failure_code' => (string) Arr::get($object, 'last_payment_error.code', ''),
+            ]);
+        });
+    }
+
     private function resolveOrderFromStripePayload(array $object): ?Order
     {
         $metadata = (array) ($object['metadata'] ?? []);
@@ -157,8 +255,49 @@ class OrderPaymentService
         return Order::query()->find($orderId);
     }
 
+    private function resolveLockedOrderFromStripePayload(array $object): ?Order
+    {
+        $metadata = (array) ($object['metadata'] ?? []);
+        $orderId = (int) ($metadata['order_id'] ?? 0);
+
+        if ($orderId <= 0) {
+            return null;
+        }
+
+        return Order::query()->lockForUpdate()->find($orderId);
+    }
+
+    private function assertStripeAmountIsExpected(Order $order, int $receivedAmountCents, array $metadata = []): void
+    {
+        $expectedOutstanding = $this->toStripeAmount($order->outstandingBalance());
+
+        if ($expectedOutstanding <= 0) {
+            throw OrderPaymentException::stripePaymentAlreadySettled();
+        }
+
+        $expectedFromMetadata = (int) ($metadata['expected_amount_cents'] ?? 0);
+        if ($expectedFromMetadata > 0 && $expectedFromMetadata !== $receivedAmountCents) {
+            throw OrderPaymentException::stripeAmountMismatch(
+                $this->fromStripeAmount($receivedAmountCents),
+                $this->fromStripeAmount($expectedFromMetadata)
+            );
+        }
+
+        if ($receivedAmountCents > $expectedOutstanding) {
+            throw OrderPaymentException::stripeAmountMismatch(
+                $this->fromStripeAmount($receivedAmountCents),
+                $this->fromStripeAmount($expectedOutstanding)
+            );
+        }
+    }
+
     private function fromStripeAmount(int $amount): float
     {
         return round($amount / 100, 2);
+    }
+
+    private function toStripeAmount(float $amount): int
+    {
+        return (int) round($amount * 100);
     }
 }

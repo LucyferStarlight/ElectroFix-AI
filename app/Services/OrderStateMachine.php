@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Services\Exceptions\InvalidOrderStatusTransitionException;
-use App\Services\Exceptions\OrderApprovalException;
 use App\Services\Exceptions\OrderWorkflowException;
+use Illuminate\Support\Facades\DB;
 
 class OrderStateMachine
 {
@@ -30,29 +30,42 @@ class OrderStateMachine
 
     public function transition(Order $order, OrderStatus|string $newStatus): Order
     {
-        $rawStatus = (string) $order->getRawOriginal('status');
-        $fromStatus = OrderStatus::fromInput($rawStatus);
-        $toStatus = OrderStatus::fromInput($newStatus);
+        return DB::transaction(function () use ($order, $newStatus): Order {
+            $lockedOrder = Order::query()
+                ->with(['customer:id,company_id', 'equipment:id,company_id,customer_id'])
+                ->lockForUpdate()
+                ->find($order->id);
 
-        $this->guardApprovalRules($order, $toStatus);
+            if (! $lockedOrder) {
+                throw OrderWorkflowException::orderNotFoundForTransition();
+            }
 
-        if (! $this->canTransition($fromStatus, $toStatus)) {
-            throw new InvalidOrderStatusTransitionException(
-                $fromStatus,
-                $toStatus,
-                $order,
-                $this->allowedTransitions($fromStatus)
-            );
-        }
+            $lockedOrder->assertCriticalRelations();
 
-        if ($fromStatus === $toStatus && $rawStatus === $toStatus->value) {
-            return $order;
-        }
+            $rawStatus = (string) $lockedOrder->getRawOriginal('status');
+            $fromStatus = OrderStatus::fromInput($rawStatus);
+            $toStatus = OrderStatus::fromInput($newStatus);
 
-        $order->status = $toStatus->value;
-        $order->save();
+            if (! $this->canTransition($fromStatus, $toStatus)) {
+                throw new InvalidOrderStatusTransitionException(
+                    $fromStatus,
+                    $toStatus,
+                    $lockedOrder,
+                    $this->allowedTransitions($fromStatus)
+                );
+            }
 
-        return $order;
+            $this->orderWorkflowService->ensureCanTransitionTo($lockedOrder, $toStatus->value);
+
+            if ($fromStatus === $toStatus && $rawStatus === $toStatus->value) {
+                return $lockedOrder;
+            }
+
+            $lockedOrder->status = $toStatus->value;
+            $lockedOrder->save();
+
+            return $lockedOrder;
+        });
     }
 
     public function availableTransitions(OrderStatus|string|null $from): array
@@ -110,24 +123,4 @@ class OrderStateMachine
         };
     }
 
-    private function guardApprovalRules(Order $order, OrderStatus $toStatus): void
-    {
-        if ($toStatus === OrderStatus::APPROVED && ! $order->isApproved()) {
-            throw OrderApprovalException::approvalContextRequired();
-        }
-
-        if ($toStatus === OrderStatus::IN_REPAIR) {
-            if (! $order->isApproved()) {
-                throw OrderApprovalException::approvalRequiredForRepair();
-            }
-
-            if (! $this->orderWorkflowService->canRepair($order)) {
-                throw OrderWorkflowException::cannotRepair();
-            }
-        }
-
-        if ($toStatus === OrderStatus::CLOSED && ! $this->orderWorkflowService->canClose($order)) {
-            throw OrderWorkflowException::cannotCloseUntilPaid();
-        }
-    }
 }

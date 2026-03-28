@@ -16,9 +16,14 @@ class OrderFactory extends Factory
     public function definition(): array
     {
         return [
-            'company_id' => Company::factory(),
-            'customer_id' => Customer::factory(),
-            'equipment_id' => Equipment::factory(),
+            'company_id' => static fn (): int => Company::factory()->create()->id,
+            'customer_id' => static fn (array $attributes): int => Customer::factory()->create([
+                'company_id' => $attributes['company_id'],
+            ])->id,
+            'equipment_id' => static fn (array $attributes): int => Equipment::factory()->create([
+                'company_id' => $attributes['company_id'],
+                'customer_id' => $attributes['customer_id'],
+            ])->id,
             'technician' => fake()->name(),
             'symptoms' => 'No enciende',
             'status' => OrderStatus::CREATED->value,

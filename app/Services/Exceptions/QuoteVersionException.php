@@ -35,4 +35,24 @@ class QuoteVersionException extends DomainException
     {
         return new self('La orden vinculada a la cotización no pertenece al mismo contexto del documento.');
     }
+
+    public static function quoteRequiresActiveOrderContext(): self
+    {
+        return new self('La cotización requiere una orden activa y consistente para aprobarse.');
+    }
+
+    public static function invalidQuoteStatusForApproval(string $status): self
+    {
+        return new self(sprintf('La cotización no puede aprobarse desde el estado [%s].', $status));
+    }
+
+    public static function quoteCompanyMismatch(): self
+    {
+        return new self('La cotización y la orden asociada no pertenecen a la misma empresa.');
+    }
+
+    public static function quoteCustomerMismatch(): self
+    {
+        return new self('La cotización y la orden asociada no pertenecen al mismo cliente.');
+    }
 }

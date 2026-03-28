@@ -8,6 +8,7 @@ use App\Models\PlanPrice;
 use App\Models\StripeWebhookEvent;
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -31,36 +32,27 @@ class StripeWebhookService
             return;
         }
 
-        $stored = StripeWebhookEvent::query()->firstOrCreate(
-            ['event_id' => $eventId],
-            [
-                'type' => $eventType,
-                'payload' => $eventPayload,
-                'status' => 'processing',
-            ]
-        );
-
-        if ($stored->status === 'processed') {
-            return;
-        }
-
-        if (! $stored->wasRecentlyCreated
-            && $stored->status === 'processing'
-            && $stored->updated_at !== null
-            && $stored->updated_at->gt(now()->subMinutes(5))) {
-            return;
-        }
-
-        $stored->update([
-            'status' => 'processing',
-            'error_message' => null,
+        Log::info('Stripe webhook received', [
+            'event_id' => $eventId,
+            'event_type' => $eventType,
         ]);
+
+        $stored = $this->claimEventForProcessing($eventPayload, $eventId, $eventType);
+        if (! $stored) {
+            Log::info('Stripe webhook duplicate ignored', [
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+            ]);
+
+            return;
+        }
 
         try {
             DB::transaction(function () use ($eventPayload, $eventType): void {
                 match ($eventType) {
                     'checkout.session.completed' => $this->onCheckoutCompleted($eventPayload),
                     'payment_intent.succeeded' => $this->onOrderPaymentIntentSucceeded($eventPayload),
+                    'payment_intent.payment_failed' => $this->onOrderPaymentIntentFailed($eventPayload),
                     'charge.refunded' => $this->onOrderChargeRefunded($eventPayload),
                     'customer.subscription.created',
                     'customer.subscription.updated' => $this->onSubscriptionUpsert($eventPayload),
@@ -75,6 +67,7 @@ class StripeWebhookService
             $trackedEvents = [
                 'checkout.session.completed',
                 'payment_intent.succeeded',
+                'payment_intent.payment_failed',
                 'charge.refunded',
                 'customer.subscription.created',
                 'customer.subscription.updated',
@@ -88,6 +81,12 @@ class StripeWebhookService
                 'status' => in_array($eventType, $trackedEvents, true) ? 'processed' : 'ignored',
                 'processed_at' => now(),
                 'error_message' => null,
+            ]);
+
+            Log::info('Stripe webhook processed', [
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'status' => in_array($eventType, $trackedEvents, true) ? 'processed' : 'ignored',
             ]);
         } catch (\Throwable $e) {
             $stored->update([
@@ -104,6 +103,62 @@ class StripeWebhookService
 
             throw $e;
         }
+    }
+
+    private function claimEventForProcessing(array $eventPayload, string $eventId, string $eventType): ?StripeWebhookEvent
+    {
+        $wasCreatedNow = false;
+
+        try {
+            $stored = StripeWebhookEvent::query()->firstOrCreate(
+                ['event_id' => $eventId],
+                [
+                    'type' => $eventType,
+                    'payload' => $eventPayload,
+                    'status' => 'processing',
+                    'processed_at' => null,
+                    'error_message' => null,
+                ]
+            );
+            $wasCreatedNow = $stored->wasRecentlyCreated;
+        } catch (QueryException $exception) {
+            if ((string) $exception->getCode() !== '23000') {
+                throw $exception;
+            }
+        }
+
+        return DB::transaction(function () use ($eventPayload, $eventId, $eventType, $wasCreatedNow): ?StripeWebhookEvent {
+            $stored = StripeWebhookEvent::query()
+                ->where('event_id', $eventId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $stored) {
+                return null;
+            }
+
+            if (in_array($stored->status, ['processed', 'ignored'], true)) {
+                return null;
+            }
+
+            if ($stored->status === 'processing'
+                && $stored->updated_at !== null
+                && $stored->updated_at->gt(now()->subMinutes(5))
+                && ! $wasCreatedNow) {
+                return null;
+            }
+
+            $stored->fill([
+                'type' => $eventType,
+                'payload' => $eventPayload,
+                'status' => 'processing',
+                'processed_at' => null,
+                'error_message' => null,
+            ]);
+            $stored->save();
+
+            return $stored;
+        });
     }
 
     private function onCheckoutCompleted(array $payload): void
@@ -221,6 +276,11 @@ class StripeWebhookService
     private function onOrderPaymentIntentSucceeded(array $payload): void
     {
         $this->orderPaymentService->syncStripePaymentIntentSucceeded($payload);
+    }
+
+    private function onOrderPaymentIntentFailed(array $payload): void
+    {
+        $this->orderPaymentService->syncStripePaymentIntentFailed($payload);
     }
 
     private function onOrderChargeRefunded(array $payload): void

@@ -20,4 +20,28 @@ class OrderPaymentException extends DomainException
     {
         return new self('El evento de Stripe no contiene una referencia válida a la orden.');
     }
+
+    public static function stripeAmountMismatch(float $received, float $expected): self
+    {
+        return new self(sprintf(
+            'Monto de Stripe inválido para la orden. Recibido: %.2f, esperado: %.2f.',
+            $received,
+            $expected
+        ));
+    }
+
+    public static function stripePaymentAlreadySettled(): self
+    {
+        return new self('La orden ya no tiene saldo pendiente para aplicar este pago de Stripe.');
+    }
+
+    public static function invalidPaymentContext(string $field): self
+    {
+        return new self(sprintf('Falta información obligatoria para registrar el pago: %s.', $field));
+    }
+
+    public static function inconsistentOrderRelations(): self
+    {
+        return new self('La orden tiene relaciones inconsistentes y no puede registrar pagos.');
+    }
 }

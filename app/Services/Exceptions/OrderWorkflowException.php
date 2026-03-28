@@ -35,4 +35,34 @@ class OrderWorkflowException extends DomainException
     {
         return new self('La orden no puede cerrarse mientras mantenga saldo pendiente.');
     }
+
+    public static function orderNotFoundForTransition(): self
+    {
+        return new self('La orden no existe o ya no está disponible para transición de estado.');
+    }
+
+    public static function orderRelationsIncomplete(): self
+    {
+        return new self('La orden no tiene relaciones completas de cliente/equipo para una operación crítica.');
+    }
+
+    public static function orderCustomerCompanyMismatch(): self
+    {
+        return new self('La orden tiene un cliente que no pertenece a la misma empresa.');
+    }
+
+    public static function orderEquipmentCompanyMismatch(): self
+    {
+        return new self('La orden tiene un equipo que no pertenece a la misma empresa.');
+    }
+
+    public static function orderEquipmentCustomerMismatch(): self
+    {
+        return new self('La orden tiene un equipo que no coincide con el cliente asignado.');
+    }
+
+    public static function invalidTransitionTarget(): self
+    {
+        return new self('No se definió un estado de destino válido para la transición.');
+    }
 }

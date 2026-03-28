@@ -6,6 +6,7 @@ use App\Enums\OrderPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Services\Exceptions\OrderApprovalException;
 use App\Services\Exceptions\OrderPaymentException;
+use App\Services\Exceptions\OrderWorkflowException;
 use App\Services\OrderStateMachine;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -102,17 +103,27 @@ class Order extends Model
         $approvalChannel = $this->normalizeApprovalChannel($approvalChannel);
 
         DB::transaction(function () use ($approvedBy, $approvalChannel): void {
-            $this->forceFill([
-                'approved_at' => $this->approved_at ?? now(),
+            $order = self::query()
+                ->lockForUpdate()
+                ->find($this->id);
+
+            if (! $order) {
+                throw OrderWorkflowException::orderNotFoundForTransition();
+            }
+
+            $order->assertCriticalRelations();
+
+            $order->forceFill([
+                'approved_at' => $order->approved_at ?? now(),
                 'approved_by' => $approvedBy,
                 'approval_channel' => $approvalChannel,
                 'rejected_at' => null,
                 'rejection_reason' => null,
             ]);
 
-            $this->save();
+            $order->save();
 
-            app(OrderStateMachine::class)->transition($this, OrderStatus::APPROVED);
+            app(OrderStateMachine::class)->transition($order, OrderStatus::APPROVED);
         });
 
         return $this->refresh();
@@ -127,7 +138,17 @@ class Order extends Model
         }
 
         DB::transaction(function () use ($reason): void {
-            $this->forceFill([
+            $order = self::query()
+                ->lockForUpdate()
+                ->find($this->id);
+
+            if (! $order) {
+                throw OrderWorkflowException::orderNotFoundForTransition();
+            }
+
+            $order->assertCriticalRelations();
+
+            $order->forceFill([
                 'rejected_at' => now(),
                 'rejection_reason' => $reason,
                 'approved_at' => null,
@@ -135,9 +156,9 @@ class Order extends Model
                 'approval_channel' => null,
             ]);
 
-            $this->save();
+            $order->save();
 
-            app(OrderStateMachine::class)->transition($this, OrderStatus::CANCELED);
+            app(OrderStateMachine::class)->transition($order, OrderStatus::CANCELED);
         });
 
         return $this->refresh();
@@ -266,7 +287,19 @@ class Order extends Model
         }
 
         return DB::transaction(function () use ($amount, $context): OrderPayment {
-            $payment = $this->payments()->create([
+            $order = self::query()
+                ->with(['customer:id,company_id', 'equipment:id,company_id,customer_id'])
+                ->lockForUpdate()
+                ->find($this->id);
+
+            if (! $order) {
+                throw OrderWorkflowException::orderNotFoundForTransition();
+            }
+
+            $order->assertCriticalRelationsForPayments();
+            $order->assertPaymentContextIsComplete($context);
+
+            $payment = $order->payments()->create([
                 'billing_document_id' => $context['billing_document_id'] ?? null,
                 'direction' => 'payment',
                 'amount' => round($amount, 2),
@@ -281,7 +314,7 @@ class Order extends Model
                 'processed_at' => $context['processed_at'] ?? now(),
             ]);
 
-            $this->recalculatePaymentStatus();
+            $order->recalculatePaymentStatus();
 
             return $payment->fresh();
         });
@@ -293,12 +326,28 @@ class Order extends Model
             throw OrderPaymentException::amountMustBePositive();
         }
 
-        if ($amount > (float) $this->total_paid) {
+        $currentNetPaid = (float) self::query()
+            ->whereKey($this->id)
+            ->value('total_paid');
+
+        if ($amount > $currentNetPaid) {
             throw OrderPaymentException::refundExceedsPaidAmount();
         }
 
         return DB::transaction(function () use ($amount, $context): OrderPayment {
-            $refund = $this->payments()->create([
+            $order = self::query()
+                ->with(['customer:id,company_id', 'equipment:id,company_id,customer_id'])
+                ->lockForUpdate()
+                ->find($this->id);
+
+            if (! $order) {
+                throw OrderWorkflowException::orderNotFoundForTransition();
+            }
+
+            $order->assertCriticalRelationsForPayments();
+            $order->assertPaymentContextIsComplete($context);
+
+            $refund = $order->payments()->create([
                 'billing_document_id' => $context['billing_document_id'] ?? null,
                 'direction' => 'refund',
                 'amount' => round($amount, 2),
@@ -313,10 +362,56 @@ class Order extends Model
                 'processed_at' => $context['processed_at'] ?? now(),
             ]);
 
-            $this->recalculatePaymentStatus();
+            $order->recalculatePaymentStatus();
 
             return $refund->fresh();
         });
+    }
+
+    public function assertCriticalRelations(): void
+    {
+        $this->loadMissing([
+            'customer:id,company_id',
+            'equipment:id,company_id,customer_id',
+        ]);
+
+        if (! $this->customer || ! $this->equipment) {
+            throw OrderWorkflowException::orderRelationsIncomplete();
+        }
+
+        if ((int) $this->customer->company_id !== (int) $this->company_id) {
+            throw OrderWorkflowException::orderCustomerCompanyMismatch();
+        }
+
+        if ((int) $this->equipment->company_id !== (int) $this->company_id) {
+            throw OrderWorkflowException::orderEquipmentCompanyMismatch();
+        }
+
+        if ((int) $this->equipment->customer_id !== (int) $this->customer_id) {
+            throw OrderWorkflowException::orderEquipmentCustomerMismatch();
+        }
+    }
+
+    private function assertCriticalRelationsForPayments(): void
+    {
+        try {
+            $this->assertCriticalRelations();
+        } catch (OrderWorkflowException $exception) {
+            throw OrderPaymentException::inconsistentOrderRelations();
+        }
+    }
+
+    private function assertPaymentContextIsComplete(array $context): void
+    {
+        $source = trim((string) ($context['source'] ?? 'manual'));
+        if ($source === '') {
+            throw OrderPaymentException::invalidPaymentContext('source');
+        }
+
+        $currency = trim((string) ($context['currency'] ?? 'mxn'));
+        if ($currency === '') {
+            throw OrderPaymentException::invalidPaymentContext('currency');
+        }
     }
 
     public function isFullyPaid(): bool

@@ -128,7 +128,7 @@ class OrderController extends Controller
 
         try {
             $orderStateMachine->transition($order, $newStatus);
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return back()->withErrors(['status' => $exception->getMessage()]);
         }
 
@@ -141,14 +141,12 @@ class OrderController extends Controller
 
     public function approve(
         ApproveOrderRequest $request,
-        Order $order,
-        OrderWorkflowService $orderWorkflowService
+        Order $order
     ): RedirectResponse
     {
         $this->authorizeOrder($request, $order);
 
         try {
-            $orderWorkflowService->ensureCanApprove($order);
             $order->approve(
                 $request->validated('approved_by') ?? 'customer',
                 (string) $request->validated('approval_channel')
@@ -166,7 +164,7 @@ class OrderController extends Controller
 
         try {
             $order->reject((string) $request->validated('reason'));
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return back()->withErrors(['approval' => $exception->getMessage()]);
         }
 
@@ -176,18 +174,11 @@ class OrderController extends Controller
     public function deliver(
         Request $request,
         Order $order,
-        OrderWorkflowService $orderWorkflowService,
         RepairOutcomeService $repairOutcomeService,
         OrderCustomerNotificationService $orderCustomerNotificationService
     ): RedirectResponse {
         $this->authorizeOrder($request, $order);
         $order->loadMissing('billingItems', 'repairOutcome');
-
-        try {
-            $orderWorkflowService->ensureCanDeliver($order);
-        } catch (OrderWorkflowException $exception) {
-            abort(422, $exception->getMessage());
-        }
 
         try {
             $outcome = $repairOutcomeService->markDelivered($order, $request->user());

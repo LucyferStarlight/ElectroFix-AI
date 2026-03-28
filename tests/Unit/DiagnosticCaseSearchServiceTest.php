@@ -88,7 +88,9 @@ class DiagnosticCaseSearchServiceTest extends TestCase
         $this->assertNotEmpty($results);
         $this->assertSame($matchingDiagnostic->id, $results->first()['diagnostic']->id);
         $this->assertGreaterThan(0, $results->first()['similarity_score']);
+        $this->assertGreaterThan(0, $results->first()['similarity_percentage']);
         $this->assertContains('ruido', $results->first()['matched_keywords']);
+        $this->assertSame(1, $results->first()['relevance_rank']);
     }
 
     public function test_it_accepts_equipment_id_as_second_argument(): void
@@ -132,5 +134,6 @@ class DiagnosticCaseSearchServiceTest extends TestCase
         );
 
         $this->assertSame($diagnostic->id, $results->first()['diagnostic']->id);
+        $this->assertTrue($results->first()['is_exact_equipment_match']);
     }
 }

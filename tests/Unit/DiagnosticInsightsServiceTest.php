@@ -76,8 +76,64 @@ class DiagnosticInsightsServiceTest extends TestCase
 
         $this->assertSame('power_failure', $frequentFailures->first()['failure_type']);
         $this->assertSame(2, $frequentFailures->first()['cases_count']);
+        $this->assertArrayHasKey('share_percentage', $frequentFailures->first());
         $this->assertSame('power_failure', $averageCosts->first()['failure_type']);
         $this->assertSame(600.0, $averageCosts->first()['average_repair_cost']);
         $this->assertSame(2, $averageCosts->first()['cases_count']);
+        $this->assertArrayHasKey('min_repair_cost', $averageCosts->first());
+        $this->assertArrayHasKey('max_repair_cost', $averageCosts->first());
+    }
+
+    public function test_average_cost_uses_latest_diagnostic_version_per_order(): void
+    {
+        $company = Company::factory()->create();
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+        ]);
+
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+        ]);
+
+        OrderDiagnostic::query()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'equipment_id' => $equipment->id,
+            'version' => 1,
+            'source' => 'ai',
+            'failure_type' => 'power_failure',
+        ]);
+
+        OrderDiagnostic::query()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'order_id' => $order->id,
+            'equipment_id' => $equipment->id,
+            'version' => 2,
+            'source' => 'ai',
+            'failure_type' => 'control_board_failure',
+        ]);
+
+        OrderRepairOutcome::query()->create([
+            'order_id' => $order->id,
+            'company_id' => $company->id,
+            'repair_outcome' => 'repaired',
+            'work_performed' => 'Cambio de tarjeta de control',
+            'actual_amount_charged' => 900,
+            'had_ai_diagnosis' => true,
+            'feeds_aris_training' => true,
+            'plan_at_close' => 'starter',
+        ]);
+
+        $averageCosts = app(DiagnosticInsightsService::class)->getAverageRepairCostByIssue($company->id);
+
+        $this->assertSame('control_board_failure', $averageCosts->first()['failure_type']);
+        $this->assertSame(900.0, $averageCosts->first()['average_repair_cost']);
+        $this->assertSame(1, $averageCosts->first()['cases_count']);
     }
 }

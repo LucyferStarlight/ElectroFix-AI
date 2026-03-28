@@ -73,9 +73,7 @@ class RepairOutcomeService
             ]);
         }
 
-        if ($this->orderStateMachine->canTransition($order->status, OrderStatus::DELIVERED)) {
-            $this->orderStateMachine->transition($order, OrderStatus::DELIVERED);
-        }
+        $this->orderStateMachine->transition($order, OrderStatus::DELIVERED);
 
         return $outcome->fresh();
     }

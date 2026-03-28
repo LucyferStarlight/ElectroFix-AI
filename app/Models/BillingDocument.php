@@ -113,15 +113,28 @@ class BillingDocument extends Model
             throw QuoteVersionException::onlyQuotesCanBeApproved();
         }
 
-        $order = $this->ensureCurrentQuoteContext();
+        DB::transaction(function () use ($approvedBy, $approvalChannel): void {
+            $document = self::query()
+                ->lockForUpdate()
+                ->find($this->id);
 
-        DB::transaction(function () use ($order, $approvedBy, $approvalChannel): void {
-            $this->forceFill([
+            if (! $document) {
+                throw QuoteVersionException::quoteRequiresActiveOrderContext();
+            }
+
+            $status = (string) $document->status;
+            if (! in_array($status, ['sent', 'approved'], true)) {
+                throw QuoteVersionException::invalidQuoteStatusForApproval($status);
+            }
+
+            $order = $document->ensureCurrentQuoteContext();
+
+            $document->forceFill([
                 'status' => 'approved',
                 'is_active' => true,
             ])->save();
 
-            $this->deactivateOtherVersions();
+            $document->deactivateOtherVersions();
 
             $order->approve($approvedBy, $approvalChannel);
         });
@@ -171,10 +184,29 @@ class BillingDocument extends Model
 
     private function ensureCurrentQuoteContext(): Order
     {
-        $order = $this->order;
+        $this->loadMissing('order', 'customer');
+        $order = $this->order?->loadMissing(['customer:id,company_id', 'equipment:id,company_id,customer_id']);
 
         if (! $order) {
             throw QuoteVersionException::quoteRequiresSingleOrder();
+        }
+
+        if ((int) $order->company_id !== (int) $this->company_id) {
+            throw QuoteVersionException::quoteCompanyMismatch();
+        }
+
+        if ($this->customer_id !== null && (int) $order->customer_id !== (int) $this->customer_id) {
+            throw QuoteVersionException::quoteCustomerMismatch();
+        }
+
+        if (! $order->customer || ! $order->equipment) {
+            throw QuoteVersionException::quoteRequiresActiveOrderContext();
+        }
+
+        if ((int) $order->customer->company_id !== (int) $order->company_id
+            || (int) $order->equipment->company_id !== (int) $order->company_id
+            || (int) $order->equipment->customer_id !== (int) $order->customer_id) {
+            throw QuoteVersionException::quoteRequiresActiveOrderContext();
         }
 
         return $order;

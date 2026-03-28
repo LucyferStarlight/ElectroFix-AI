@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Services\Exceptions\OrderApprovalException;
 use App\Services\Exceptions\OrderWorkflowException;
 use App\Support\OrderStatus;
 
@@ -150,6 +151,45 @@ class OrderWorkflowService
     {
         if (! $this->canClose($order)) {
             throw OrderWorkflowException::cannotCloseUntilPaid();
+        }
+    }
+
+    public function ensureCanTransitionTo(Order $order, string $toStatus): void
+    {
+        if (trim($toStatus) === '') {
+            throw OrderWorkflowException::invalidTransitionTarget();
+        }
+
+        $toStatus = OrderStatus::normalize($toStatus);
+
+        if ($toStatus === OrderStatus::APPROVED) {
+            if (! $order->isApproved()) {
+                throw OrderApprovalException::approvalContextRequired();
+            }
+
+            $this->ensureCanApprove($order);
+
+            return;
+        }
+
+        if ($toStatus === OrderStatus::IN_REPAIR) {
+            if (! $order->isApproved()) {
+                throw OrderApprovalException::approvalRequiredForRepair();
+            }
+
+            $this->ensureCanRepair($order);
+
+            return;
+        }
+
+        if ($toStatus === OrderStatus::DELIVERED) {
+            $this->ensureCanDeliver($order);
+
+            return;
+        }
+
+        if ($toStatus === OrderStatus::CLOSED) {
+            $this->ensureCanClose($order);
         }
     }
 }

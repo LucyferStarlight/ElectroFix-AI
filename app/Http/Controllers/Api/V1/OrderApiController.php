@@ -16,6 +16,7 @@ use App\Models\Order;
 use App\Services\Exceptions\InvalidOrderStatusTransitionException;
 use App\Services\Exceptions\OrderApprovalException;
 use App\Services\Exceptions\OrderWorkflowException;
+use App\Services\DiagnosticCaseSearchService;
 use App\Services\OrderCreationService;
 use App\Services\OrderStateMachine;
 use App\Services\OrderWorkflowService;
@@ -82,7 +83,7 @@ class OrderApiController extends Controller
 
         try {
             $orderStateMachine->transition($order, $newStatus);
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return response()->json([
                 'ok' => false,
                 'data' => null,
@@ -99,14 +100,12 @@ class OrderApiController extends Controller
 
     public function approve(
         ApproveOrderRequest $request,
-        Order $order,
-        OrderWorkflowService $orderWorkflowService
+        Order $order
     )
     {
         $this->assertCompanyAccess($request, $order->company_id);
 
         try {
-            $orderWorkflowService->ensureCanApprove($order);
             $order->approve(
                 $request->validated('approved_by') ?? 'customer',
                 (string) $request->validated('approval_channel')
@@ -132,7 +131,7 @@ class OrderApiController extends Controller
 
         try {
             $order->reject((string) $request->validated('reason'));
-        } catch (InvalidOrderStatusTransitionException|OrderApprovalException $exception) {
+        } catch (InvalidOrderStatusTransitionException|OrderApprovalException|OrderWorkflowException $exception) {
             return response()->json([
                 'ok' => false,
                 'data' => null,
@@ -234,5 +233,61 @@ class OrderApiController extends Controller
                 'message' => 'No existe diagnóstico IA para esta orden.',
             ],
         ], 404);
+    }
+
+    public function similarCases(Request $request, DiagnosticCaseSearchService $diagnosticCaseSearchService)
+    {
+        $data = $request->validate([
+            'symptoms' => ['required', 'string', 'min:5', 'max:600'],
+            'equipment_id' => ['nullable', 'integer'],
+            'equipment_type' => ['nullable', 'string', 'max:120'],
+            'customer_id' => ['nullable', 'integer'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:25'],
+        ]);
+
+        $companyId = $request->user()?->company_id;
+        $context = [
+            'company_id' => $companyId,
+            'equipment_id' => $data['equipment_id'] ?? null,
+            'equipment_type' => $data['equipment_type'] ?? null,
+            'customer_id' => $data['customer_id'] ?? null,
+        ];
+
+        $results = $diagnosticCaseSearchService->findSimilarCases(
+            (string) $data['symptoms'],
+            $context,
+            (int) ($data['limit'] ?? 10)
+        )->map(static function (array $row): array {
+            return [
+                'relevance_rank' => $row['relevance_rank'],
+                'similarity_percentage' => $row['similarity_percentage'],
+                'matched_keywords' => $row['matched_keywords'],
+                'diagnostic' => [
+                    'id' => $row['diagnostic']->id,
+                    'order_id' => $row['diagnostic']->order_id,
+                    'failure_type' => $row['diagnostic']->failure_type,
+                    'equipment_type' => $row['diagnostic']->equipment_type,
+                    'diagnostic_summary' => $row['diagnostic']->diagnostic_summary,
+                    'created_at' => $row['diagnostic']->created_at?->toIso8601String(),
+                ],
+            ];
+        });
+
+        return $this->success($results);
+    }
+
+    public function diagnosticInsights(Request $request, DiagnosticCaseSearchService $diagnosticCaseSearchService)
+    {
+        $data = $request->validate([
+            'limit' => ['nullable', 'integer', 'min:1', 'max:25'],
+        ]);
+
+        $companyId = $request->user()?->company_id;
+        $limit = (int) ($data['limit'] ?? 10);
+
+        return $this->success([
+            'frequent_failures' => $diagnosticCaseSearchService->getFrequentFailures($companyId, $limit),
+            'average_repair_cost_by_issue' => $diagnosticCaseSearchService->getAverageRepairCostByIssue($companyId, $limit),
+        ]);
     }
 }

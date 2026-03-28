@@ -15,6 +15,7 @@ use App\Support\ApiAbility;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/billing/stripe/webhook', [StripeController::class, 'webhook'])
+    ->middleware('stripe_signature')
     ->withoutMiddleware('throttle:api');
 
 Route::middleware(['auth:sanctum'])->group(function (): void {});
@@ -39,6 +40,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/orders/{order}/diagnostics', [OrderApiController::class, 'storeDiagnostic'])
             ->middleware(['token_ability:'.ApiAbility::AI_USE, 'throttle:ai-diagnostics']);
         Route::get('/orders/{order}/diagnostics/latest', [OrderApiController::class, 'showLatestDiagnostic'])
+            ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
+        Route::post('/orders/diagnostics/similar', [OrderApiController::class, 'similarCases'])
+            ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
+        Route::get('/orders/diagnostics/insights', [OrderApiController::class, 'diagnosticInsights'])
             ->middleware('token_ability:'.ApiAbility::ORDERS_READ);
         Route::patch('/orders/{order}/repair-outcome/feedback', [RepairOutcomeApiController::class, 'update'])
             ->middleware('token_ability:'.ApiAbility::ORDERS_WRITE);

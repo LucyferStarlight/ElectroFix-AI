@@ -25,6 +25,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'subscription_active' => \App\Http\Middleware\EnsureCompanySubscriptionActive::class,
             'must_change_password' => \App\Http\Middleware\EnsurePasswordChanged::class,
             'company_active' => \App\Http\Middleware\EnsureCompanyActive::class,
+            'stripe_signature' => \App\Http\Middleware\VerifyStripeWebhookSignature::class,
+            'order_workflow' => \App\Http\Middleware\EnsureOrderWorkflowAction::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

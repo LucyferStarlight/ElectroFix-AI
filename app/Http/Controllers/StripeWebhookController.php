@@ -6,8 +6,6 @@ use App\Services\StripeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Stripe\Exception\SignatureVerificationException;
-use Stripe\Webhook;
 
 class StripeWebhookController extends Controller
 {
@@ -17,27 +15,21 @@ class StripeWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
-        $secret = (string) (config('stripe.webhook_secret') ?: config('services.stripe.webhook_secret') ?: config('cashier.webhook.secret'));
-        $payload = $request->getContent();
-        $signature = (string) $request->header('Stripe-Signature');
+        $event = (array) $request->attributes->get('stripe_event', []);
+        $eventId = (string) data_get($event, 'id');
+        $eventType = (string) data_get($event, 'type');
 
-        if ($secret === '') {
-            return response()->json(['ok' => false, 'message' => 'Webhook secret no configurado.'], 500);
+        if ($eventId === '' || $eventType === '') {
+            return response()->json(['ok' => false, 'message' => 'Evento Stripe inválido.'], 400);
         }
 
         try {
-            $event = Webhook::constructEvent($payload, $signature, $secret);
-        } catch (\UnexpectedValueException|SignatureVerificationException $e) {
-            return response()->json(['ok' => false, 'message' => 'Firma de webhook inválida.'], 400);
-        }
-
-        try {
-            $this->stripeWebhookService->handle($event->toArray());
-        } catch (\Throwable $e) {
+            $this->stripeWebhookService->handle($event);
+        } catch (\Throwable $exception) {
             Log::error('Stripe webhook controller failure', [
-                'event_id' => (string) data_get($event->toArray(), 'id'),
-                'event_type' => (string) data_get($event->toArray(), 'type'),
-                'error_message' => mb_substr($e->getMessage(), 0, 240),
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'error_message' => mb_substr($exception->getMessage(), 0, 240),
             ]);
 
             return response()->json(['ok' => false, 'message' => 'No se pudo procesar el webhook.'], 500);

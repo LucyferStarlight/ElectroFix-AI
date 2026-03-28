@@ -32,7 +32,9 @@ Route::post('/force-password', [AuthController::class, 'updateForcedPassword'])-
 Route::get('/support', [SupportController::class, 'show'])->name('support');
 Route::post('/support', [SupportController::class, 'store'])->name('support.store');
 Route::post('/subscribe', [PublicSubscriptionController::class, 'subscribe'])->middleware('guest')->name('subscribe');
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
+    ->middleware('stripe_signature')
+    ->name('stripe.webhook');
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
@@ -46,10 +48,16 @@ Route::middleware(['auth', 'must_change_password'])->group(function (): void {
         Route::get('/dashboard/worker', [DashboardController::class, 'worker'])->name('dashboard.worker');
         Route::get('/worker/orders', [OrderController::class, 'index'])->name('worker.orders');
         Route::post('/worker/orders', [OrderController::class, 'store'])->name('worker.orders.store');
-        Route::patch('/worker/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('worker.orders.status');
-        Route::patch('/worker/orders/{order}/approve', [OrderController::class, 'approve'])->name('worker.orders.approve');
+        Route::patch('/worker/orders/{order}/status', [OrderController::class, 'updateStatus'])
+            ->middleware('order_workflow:transition')
+            ->name('worker.orders.status');
+        Route::patch('/worker/orders/{order}/approve', [OrderController::class, 'approve'])
+            ->middleware('order_workflow:approve')
+            ->name('worker.orders.approve');
         Route::patch('/worker/orders/{order}/reject', [OrderController::class, 'reject'])->name('worker.orders.reject');
-        Route::post('/worker/orders/{order}/deliver', [OrderController::class, 'deliver'])->name('worker.orders.deliver');
+        Route::post('/worker/orders/{order}/deliver', [OrderController::class, 'deliver'])
+            ->middleware('order_workflow:deliver')
+            ->name('worker.orders.deliver');
         Route::post('/worker/orders/diagnose', [OrderController::class, 'diagnose'])->name('worker.orders.diagnose');
 
         Route::get('/worker/customers', [CustomerController::class, 'index'])->name('worker.customers');

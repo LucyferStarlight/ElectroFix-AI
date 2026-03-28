@@ -172,6 +172,180 @@ class StripeWebhookTest extends TestCase
         ]);
     }
 
+    public function test_webhook_rejects_invalid_signature(): void
+    {
+        config(['services.stripe.webhook_secret' => 'whsec_test']);
+
+        $payload = [
+            'id' => 'evt_invalid_sig_123',
+            'type' => 'payment_intent.succeeded',
+            'data' => [
+                'object' => [
+                    'id' => 'pi_invalid_sig_123',
+                    'amount_received' => 1000,
+                    'currency' => 'mxn',
+                    'metadata' => [
+                        'order_id' => '1',
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->withHeader('Stripe-Signature', 't=1,v1=invalid_signature')
+            ->postJson('/api/billing/stripe/webhook', $payload);
+
+        $response->assertStatus(400);
+        $this->assertDatabaseMissing('stripe_webhook_events', [
+            'event_id' => 'evt_invalid_sig_123',
+        ]);
+    }
+
+    public function test_duplicate_event_id_is_processed_only_once(): void
+    {
+        config(['services.stripe.webhook_secret' => 'whsec_test']);
+
+        $company = Company::factory()->create();
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+        ]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'estimated_cost' => 1000,
+            'status' => OrderStatus::APPROVED,
+        ]);
+
+        $payload = [
+            'id' => 'evt_duplicate_123',
+            'type' => 'payment_intent.succeeded',
+            'data' => [
+                'object' => [
+                    'id' => 'pi_duplicate_123',
+                    'amount_received' => 30000,
+                    'currency' => 'mxn',
+                    'latest_charge' => 'ch_duplicate_123',
+                    'metadata' => [
+                        'order_id' => (string) $order->id,
+                    ],
+                ],
+            ],
+        ];
+
+        $this->postSignedWebhook($payload)->assertStatus(200);
+        $this->postSignedWebhook($payload)->assertStatus(200);
+
+        $this->assertSame(1, $order->payments()
+            ->where('direction', 'payment')
+            ->where('stripe_payment_intent_id', 'pi_duplicate_123')
+            ->count());
+    }
+
+    public function test_payment_intent_failed_webhook_registers_failed_attempt_without_changing_paid_total(): void
+    {
+        config(['services.stripe.webhook_secret' => 'whsec_test']);
+
+        $company = Company::factory()->create();
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+        ]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'estimated_cost' => 1000,
+            'status' => OrderStatus::APPROVED,
+            'payment_status' => 'pending',
+            'total_paid' => 0,
+        ]);
+
+        $payload = [
+            'id' => 'evt_pi_failed_123',
+            'type' => 'payment_intent.payment_failed',
+            'data' => [
+                'object' => [
+                    'id' => 'pi_failed_123',
+                    'amount' => 50000,
+                    'currency' => 'mxn',
+                    'latest_charge' => 'ch_failed_123',
+                    'last_payment_error' => [
+                        'code' => 'card_declined',
+                        'message' => 'Your card was declined.',
+                    ],
+                    'metadata' => [
+                        'order_id' => (string) $order->id,
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->postSignedWebhook($payload);
+
+        $response->assertStatus(200);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(0.0, (float) $order->fresh()->total_paid);
+        $this->assertDatabaseHas('order_payments', [
+            'order_id' => $order->id,
+            'direction' => 'attempt',
+            'stripe_payment_intent_id' => 'pi_failed_123',
+            'status' => 'failed',
+        ]);
+    }
+
+    public function test_payment_intent_succeeded_rejects_overpayment_amount(): void
+    {
+        config(['services.stripe.webhook_secret' => 'whsec_test']);
+
+        $company = Company::factory()->create();
+        $customer = Customer::factory()->create(['company_id' => $company->id]);
+        $equipment = Equipment::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+        ]);
+        $order = Order::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'equipment_id' => $equipment->id,
+            'estimated_cost' => 500,
+            'status' => OrderStatus::APPROVED,
+            'payment_status' => 'pending',
+            'total_paid' => 0,
+        ]);
+
+        $payload = [
+            'id' => 'evt_pi_overpay_123',
+            'type' => 'payment_intent.succeeded',
+            'data' => [
+                'object' => [
+                    'id' => 'pi_overpay_123',
+                    'amount_received' => 70000,
+                    'currency' => 'mxn',
+                    'latest_charge' => 'ch_overpay_123',
+                    'metadata' => [
+                        'order_id' => (string) $order->id,
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->postSignedWebhook($payload);
+
+        $response->assertStatus(500);
+        $this->assertSame(0.0, (float) $order->fresh()->total_paid);
+        $this->assertDatabaseMissing('order_payments', [
+            'order_id' => $order->id,
+            'stripe_payment_intent_id' => 'pi_overpay_123',
+        ]);
+        $this->assertDatabaseHas('stripe_webhook_events', [
+            'event_id' => 'evt_pi_overpay_123',
+            'status' => 'error',
+        ]);
+    }
+
     private function postSignedWebhook(array $payload)
     {
         $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
