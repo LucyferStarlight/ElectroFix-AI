@@ -1,0 +1,5 @@
+@php($code = 504)
+@php($title = 'Tiempo de espera agotado')
+@php($message = 'La solicitud tardó demasiado en completarse.')
+@php($hint = 'Intenta de nuevo o vuelve mas tarde.')
+@include('errors.base')

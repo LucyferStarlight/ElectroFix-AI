@@ -21,6 +21,7 @@ class CompanyRegistrationController extends Controller
 
     public function showForm(PlanCatalogService $planCatalogService, Request $request)
     {
+        $trialPromoActive = app(TrialPolicyService::class)->promoWindowIsActive();
         $featureMap = [
             'starter' => [
                 'Hasta 5 técnicos',
@@ -67,10 +68,16 @@ class CompanyRegistrationController extends Controller
                 'semiannual' => null,
                 'annual' => null,
             ];
+            $trialDays = [
+                'monthly' => 0,
+                'semiannual' => 0,
+                'annual' => 0,
+            ];
             foreach ($plan->prices as $price) {
                 $period = (string) $price->billing_period;
                 if (array_key_exists($period, $prices)) {
                     $prices[$period] = $price->amount !== null ? (float) $price->amount : null;
+                    $trialDays[$period] = max(0, (int) $price->trial_days);
                 }
             }
 
@@ -78,6 +85,7 @@ class CompanyRegistrationController extends Controller
                 'label' => $labelMap[$name] ?? ucfirst($name),
                 'price' => $prices['monthly'],
                 'prices' => $prices,
+                'trial_days' => $trialDays,
                 'features' => $featureMap[$name] ?? [],
                 'ai_enabled' => (bool) $plan->ai_enabled,
             ];
@@ -89,7 +97,7 @@ class CompanyRegistrationController extends Controller
             $selectedPeriod = 'monthly';
         }
 
-        return view('auth.register', compact('plans', 'selectedPlan', 'selectedPeriod'));
+        return view('auth.register', compact('plans', 'selectedPlan', 'selectedPeriod', 'trialPromoActive'));
     }
 
     public function store(Request $request): RedirectResponse

@@ -5,11 +5,76 @@
             <span>ELECTRO<span class="text-accent">FIX</span>-AI</span>
         </a>
 
-        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
+        @auth
+            @php($user = auth()->user())
+            <div class="dropdown d-lg-none">
+                <button
+                    class="navbar-toggler border-0 mobile-menu-trigger"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    aria-label="Abrir menu"
+                >
+                    <span class="navbar-toggler-icon"></span>
+                </button>
 
-        <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="dropdown-menu dropdown-menu-end p-2 mobile-nav-dropdown">
+                    <li class="dropdown-header px-3 py-2">{{ $user->name }} · {{ $user->role }}</li>
+
+                    <li><hr class="dropdown-divider my-2"></li>
+                    <li class="dropdown-header px-3 py-1">Dashboard</li>
+                    <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('dashboard') }}">Inicio</a></li>
+
+                    @if(in_array($user->role, ['worker', 'admin', 'developer'], true))
+                        <li><hr class="dropdown-divider my-2"></li>
+                        <li class="dropdown-header px-3 py-1">Operaci&oacute;n</li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('worker.orders') }}">&Oacute;rdenes</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('worker.customers') }}">Clientes</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('worker.equipments') }}">Equipos</a></li>
+                        @if($user->canAccessModule('inventory'))
+                            <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('worker.inventory') }}">Inventario</a></li>
+                        @endif
+                        @if($user->canAccessModule('billing'))
+                            <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('worker.billing') }}">Facturaci&oacute;n</a></li>
+                        @endif
+                    @endif
+
+                    @if($user->role === 'admin')
+                        <li><hr class="dropdown-divider my-2"></li>
+                        <li class="dropdown-header px-3 py-1">Administraci&oacute;n</li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('dashboard.admin') }}">Panel Admin</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('admin.technicians.index') }}">T&eacute;cnicos</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('admin.company.edit') }}">Datos Empresa</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('admin.subscription.edit') }}">Suscripci&oacute;n</a></li>
+                    @endif
+
+                    @if($user->role === 'developer')
+                        <li><hr class="dropdown-divider my-2"></li>
+                        <li class="dropdown-header px-3 py-1">Developer</li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('dashboard.developer') }}">Panel Developer</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('developer.companies.index') }}">Empresas</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('developer.subscriptions') }}">Suscripciones</a></li>
+                        <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('developer.test-company') }}">Empresa Test</a></li>
+                    @endif
+
+                    <li><hr class="dropdown-divider my-2"></li>
+                    <li class="px-3 py-2">
+                        <button class="btn btn-ui btn-ghost btn-sm w-100 text-start" type="button" data-ui-theme-toggle>
+                            <span data-ui-theme-toggle-label>Modo claro</span>
+                        </button>
+                    </li>
+                    <li><a class="dropdown-item rounded-3 px-3 py-2" href="{{ route('support') }}">Soporte</a></li>
+                    <li class="px-3 py-2">
+                        <form method="post" action="{{ route('logout') }}" class="m-0">
+                            @csrf
+                            <button type="submit" class="btn btn-ui btn-outline-ui btn-sm w-100">Salir</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        @endauth
+
+        <div class="navbar-collapse d-none d-lg-flex">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 @auth
                     <li class="nav-item"><a class="nav-link" href="{{ route('dashboard') }}">Dashboard</a></li>

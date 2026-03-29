@@ -1,0 +1,5 @@
+@php($code = 419)
+@php($title = 'Sesion expirada')
+@php($message = 'Tu sesion caducó por seguridad.')
+@php($hint = 'Vuelve a cargar la pagina e inicia sesion de nuevo.')
+@include('errors.base')

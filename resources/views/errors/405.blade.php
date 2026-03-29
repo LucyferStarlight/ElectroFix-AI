@@ -1,0 +1,5 @@
+@php($code = 405)
+@php($title = 'Metodo no permitido')
+@php($message = 'La accion solicitada no esta permitida para esta ruta.')
+@php($hint = 'Verifica el metodo HTTP de la solicitud.')
+@include('errors.base')

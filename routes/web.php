@@ -38,6 +38,36 @@ Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
 
 Route::get('/error/generic', fn () => view('generic', ['currentPage' => 'error']))->name('generic.error');
 
+Route::get('/dev/errors', function () {
+    $user = auth()->user();
+    $isAllowed = app()->environment(['local', 'testing'])
+        || ($user && in_array((string) $user->role, ['developer', 'admin'], true));
+
+    abort_unless($isAllowed, 404);
+
+    $codes = [400, 401, 403, 404, 405, 408, 419, 422, 429, 500, 502, 503, 504];
+    $links = array_map(
+        fn (int $code): string => sprintf('<li><a href="%s">/dev/errors/%d</a></li>', url("/dev/errors/{$code}"), $code),
+        $codes
+    );
+
+    return response('<h1>Error previews</h1><ul>'.implode('', $links).'</ul>', 200)
+        ->header('Content-Type', 'text/html; charset=UTF-8');
+})->name('dev.errors.index');
+
+Route::get('/dev/errors/{code}', function (int $code) {
+    $user = auth()->user();
+    $isAllowed = app()->environment(['local', 'testing'])
+        || ($user && in_array((string) $user->role, ['developer', 'admin'], true));
+
+    abort_unless($isAllowed, 404);
+
+    $allowed = [400, 401, 403, 404, 405, 408, 419, 422, 429, 500, 502, 503, 504];
+    abort_unless(in_array($code, $allowed, true), 404);
+
+    abort($code);
+})->whereNumber('code')->name('dev.errors.show');
+
 Route::middleware(['auth', 'must_change_password'])->group(function (): void {
     Route::get('/account/suspended', [CompanyRegistrationController::class, 'suspended'])->name('account.suspended');
     Route::post('/account/suspended/checkout', [CompanyRegistrationController::class, 'retryCheckout'])->name('onboarding.retry');

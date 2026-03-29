@@ -1,0 +1,5 @@
+@php($code = 403)
+@php($title = 'Acceso denegado')
+@php($message = 'No tienes permisos para acceder a este recurso.')
+@php($hint = 'Si crees que esto es un error, inicia sesion con la cuenta correcta o contacta soporte.')
+@include('errors.base')

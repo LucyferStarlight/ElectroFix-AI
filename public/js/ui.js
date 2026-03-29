@@ -26,14 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   applyTheme(current);
 
-  if (!toggles.length) return;
-
-  toggles.forEach((toggleBtn) => {
-    toggleBtn.addEventListener('click', () => {
-      const nextTheme = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
-      applyTheme(nextTheme);
+  if (toggles.length) {
+    toggles.forEach((toggleBtn) => {
+      toggleBtn.addEventListener('click', () => {
+        const nextTheme = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+        applyTheme(nextTheme);
+      });
     });
-  });
+  }
 
   const alertsRoot = document.querySelector('[data-alerts-root]');
   if (alertsRoot) {
@@ -74,4 +74,5 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+
 });

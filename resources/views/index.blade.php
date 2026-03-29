@@ -25,8 +25,25 @@
     }
 
     #landing-hero {
-        padding-top: 7rem;
+        padding-top: 4.5rem;
         padding-bottom: 5rem;
+    }
+
+    #launch-countdown {
+        margin-top: 5.75rem;
+    }
+
+    #launch-countdown .countdown-shell {
+        border-radius: 1.25rem;
+        border: 1px solid rgba(14, 165, 233, 0.22);
+        background:
+            radial-gradient(circle at top right, rgba(14, 165, 233, 0.14), transparent 45%),
+            linear-gradient(180deg, rgba(14, 165, 233, 0.06), rgba(255, 255, 255, 1));
+    }
+
+    #launch-countdown .countdown-time {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
     }
 
     #landing-hero .display-4,
@@ -98,7 +115,11 @@
 
     @media (max-width: 991.98px) {
         #landing-hero {
-            padding-top: 6rem;
+            padding-top: 3rem;
+        }
+
+        #launch-countdown {
+            margin-top: 5.25rem;
         }
 
         #landingNavbarContent {
@@ -195,6 +216,17 @@
         </div>
     </div>
 </nav>
+
+<section id="launch-countdown" class="pb-2">
+    <div class="container">
+        <div class="countdown-shell shadow-soft p-3 p-lg-4 text-center">
+            <p class="small text-uppercase text-muted fw-semibold mb-2" data-launch-label>Cuenta regresiva de lanzamiento</p>
+            <p class="h4 fw-bold mb-2 countdown-time" data-launch-counter>--d --h --m --s</p>
+            <p class="mb-3 text-muted" data-launch-copy>ElectroFix-AI abre oficialmente el lunes a la 1:00 AM (CDMX).</p>
+            <a class="btn btn-ui btn-primary-ui" data-launch-cta href="#precios">Ver planes</a>
+        </div>
+    </div>
+</section>
 
 <section id="landing-hero">
     <div class="container">
@@ -473,6 +505,9 @@
                     $monthly = (float) data_get($plan, 'prices.monthly.amount', 0);
                     $semiannual = (float) data_get($plan, 'prices.semiannual.amount', 0);
                     $annual = (float) data_get($plan, 'prices.annual.amount', 0);
+                    $trialMonthly = (int) data_get($plan, 'prices.monthly.trial_days', 0);
+                    $trialSemiannual = (int) data_get($plan, 'prices.semiannual.trial_days', 0);
+                    $trialAnnual = (int) data_get($plan, 'prices.annual.trial_days', 0);
                 @endphp
 
                 <div class="col-lg-4">
@@ -481,7 +516,10 @@
                         data-label="{{ $plan['label'] }}"
                         data-monthly="{{ $monthly }}"
                         data-semiannual="{{ $semiannual }}"
-                        data-annual="{{ $annual }}">
+                        data-annual="{{ $annual }}"
+                        data-trial-monthly="{{ $trialMonthly }}"
+                        data-trial-semiannual="{{ $trialSemiannual }}"
+                        data-trial-annual="{{ $trialAnnual }}">
                         <div class="card-body p-4 p-xl-5 d-flex flex-column">
                             <div class="d-flex align-items-center justify-content-between mb-3">
                                 <h3 class="h4 fw-bold mb-0">{{ $plan['label'] }}</h3>
@@ -498,6 +536,7 @@
                                     <span class="text-muted fw-semibold" data-price-suffix>/ mes</span>
                                 </div>
                                 <div class="small text-muted" data-price-caption></div>
+                                <div class="small text-success mt-1" data-trial-caption></div>
                             </div>
 
                             <ul class="list-unstyled d-grid gap-2 mb-4">
@@ -650,6 +689,12 @@
         const buttons = Array.from(document.querySelectorAll('[data-period-button]'));
         const cards = Array.from(document.querySelectorAll('[data-plan-card]'));
         const registerBaseUrl = @json(route('register'));
+        const trialPromoActive = @json(!empty($trialPromoActive));
+        const launchLabel = document.querySelector('[data-launch-label]');
+        const launchCounter = document.querySelector('[data-launch-counter]');
+        const launchCopy = document.querySelector('[data-launch-copy]');
+        const launchCta = document.querySelector('[data-launch-cta]');
+        const launchAt = new Date('2026-03-30T01:00:00-06:00');
 
         const periodConfig = {
             monthly: {
@@ -682,11 +727,17 @@
                     semiannual: Number(card.dataset.semiannual || 0),
                     annual: Number(card.dataset.annual || 0),
                 };
+                const trialByPeriod = {
+                    monthly: Number(card.dataset.trialMonthly || 0),
+                    semiannual: Number(card.dataset.trialSemiannual || 0),
+                    annual: Number(card.dataset.trialAnnual || 0),
+                };
 
                 const currentPrice = prices[period] || 0;
                 const value = card.querySelector('[data-price-value]');
                 const suffix = card.querySelector('[data-price-suffix]');
                 const caption = card.querySelector('[data-price-caption]');
+                const trialCaption = card.querySelector('[data-trial-caption]');
                 const link = card.querySelector('[data-register-link]');
 
                 if (value) {
@@ -699,6 +750,12 @@
 
                 if (caption) {
                     caption.textContent = typeof config.caption === 'function' ? config.caption(prices) : '';
+                }
+                if (trialCaption) {
+                    const trialDays = trialByPeriod[period] || 0;
+                    trialCaption.textContent = trialPromoActive && trialDays > 0
+                        ? `${trialDays} días de prueba en este periodo`
+                        : '';
                 }
 
                 if (link) {
@@ -714,7 +771,37 @@
             button.addEventListener('click', () => setPeriod(button.dataset.periodButton));
         });
 
+        const updateLaunchBanner = () => {
+            if (!launchCounter || !launchCopy || !launchCta || !launchLabel) {
+                return;
+            }
+
+            const now = new Date();
+            const diff = launchAt.getTime() - now.getTime();
+
+            if (diff <= 0) {
+                launchLabel.textContent = 'Promoción activa';
+                launchCounter.textContent = '15 días de prueba gratis';
+                launchCopy.textContent = 'Aprovecha la ventana de lanzamiento y comienza con periodo semestral.';
+                launchCta.textContent = 'Quiero plan semestral';
+                launchCta.href = @json(route('register', ['period' => 'semiannual']));
+                setPeriod('semiannual');
+                return;
+            }
+
+            const secondsTotal = Math.floor(diff / 1000);
+            const days = Math.floor(secondsTotal / 86400);
+            const hours = Math.floor((secondsTotal % 86400) / 3600);
+            const minutes = Math.floor((secondsTotal % 3600) / 60);
+            const seconds = secondsTotal % 60;
+            launchCounter.textContent = `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+            launchCta.textContent = 'Ver planes';
+            launchCta.href = '#precios';
+        };
+
         setPeriod('monthly');
+        updateLaunchBanner();
+        window.setInterval(updateLaunchBanner, 1000);
     })();
 </script>
 @endsection

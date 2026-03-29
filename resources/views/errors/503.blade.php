@@ -1,0 +1,5 @@
+@php($code = 503)
+@php($title = 'Servicio temporalmente no disponible')
+@php($message = 'Estamos aplicando mantenimiento o actualizaciones.')
+@php($hint = 'Vuelve a intentar en unos minutos.')
+@include('errors.base')

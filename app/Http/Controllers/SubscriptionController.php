@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\PlanCatalogService;
+use App\Services\TrialPolicyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -11,6 +12,11 @@ use Stripe\StripeClient;
 
 class SubscriptionController extends Controller
 {
+    public function __construct(
+        private readonly TrialPolicyService $trialPolicyService
+    ) {
+    }
+
     public function index(PlanCatalogService $planCatalogService)
     {
         $configPlans = config('stripe.plans', []);
@@ -66,6 +72,7 @@ class SubscriptionController extends Controller
                 $prices[$period] = [
                     'amount' => $price->amount !== null ? (float) $price->amount : null,
                     'price_id' => $priceId,
+                    'trial_days' => max(0, (int) $price->trial_days),
                 ];
             }
 
@@ -85,7 +92,10 @@ class SubscriptionController extends Controller
             }
         }
 
-        return view('index', compact('plans'));
+        return view('index', [
+            'plans' => $plans,
+            'trialPromoActive' => $this->trialPolicyService->promoWindowIsActive(),
+        ]);
     }
 
     public function subscribe(Request $request): RedirectResponse
@@ -103,6 +113,8 @@ class SubscriptionController extends Controller
         $plan = (string) $validated['plan'];
         $billingPeriod = (string) $validated['billing_period'];
         $priceId = (string) Arr::get($plans, "{$plan}.prices.{$billingPeriod}", '');
+        $price = app(PlanCatalogService::class)->resolvePrice($plan, $billingPeriod, 'mxn');
+        $trialDays = $this->trialPolicyService->trialDaysForPrice($price);
 
         if ($priceId === '') {
             return back()->withErrors([
@@ -119,6 +131,20 @@ class SubscriptionController extends Controller
         $stripe = new StripeClient((string) config('services.stripe.secret'));
 
         try {
+            $subscriptionData = [
+                'metadata' => [
+                    'signup_source' => 'public_landing',
+                    'plan' => $plan,
+                    'billing_period' => $billingPeriod,
+                    'company_name' => (string) ($validated['company_name'] ?? ''),
+                    'admin_name' => (string) ($validated['admin_name'] ?? ''),
+                    'admin_email' => (string) ($validated['email'] ?? ''),
+                ],
+            ];
+            if ($trialDays > 0) {
+                $subscriptionData['trial_period_days'] = $trialDays;
+            }
+
             $session = $stripe->checkout->sessions->create([
                 'mode' => 'subscription',
                 'line_items' => [[
@@ -136,16 +162,7 @@ class SubscriptionController extends Controller
                     'admin_name' => (string) ($validated['admin_name'] ?? ''),
                     'admin_email' => (string) ($validated['email'] ?? ''),
                 ],
-                'subscription_data' => [
-                    'metadata' => [
-                        'signup_source' => 'public_landing',
-                        'plan' => $plan,
-                        'billing_period' => $billingPeriod,
-                        'company_name' => (string) ($validated['company_name'] ?? ''),
-                        'admin_name' => (string) ($validated['admin_name'] ?? ''),
-                        'admin_email' => (string) ($validated['email'] ?? ''),
-                    ],
-                ],
+                'subscription_data' => $subscriptionData,
             ]);
         } catch (\Stripe\Exception\ApiErrorException $exception) {
             $message = 'En este momento no fue posible iniciar el pago. Intenta nuevamente en unos minutos o contacta a soporte.';

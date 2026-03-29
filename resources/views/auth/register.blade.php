@@ -66,12 +66,16 @@
                                                data-plan-card
                                                data-price-monthly="{{ $monthly ?? '' }}"
                                                data-price-semiannual="{{ $semiannual ?? '' }}"
-                                               data-price-annual="{{ $annual ?? '' }}">
+                                               data-price-annual="{{ $annual ?? '' }}"
+                                               data-trial-monthly="{{ (int) data_get($plan, 'trial_days.monthly', 0) }}"
+                                               data-trial-semiannual="{{ (int) data_get($plan, 'trial_days.semiannual', 0) }}"
+                                               data-trial-annual="{{ (int) data_get($plan, 'trial_days.annual', 0) }}">
                                             <div class="d-flex align-items-start gap-2">
                                                 <input class="form-check-input mt-1" type="radio" name="plan" value="{{ $key }}" @checked(old('plan', $selectedPlan ?? 'starter') === $key) required>
                                                 <div>
                                                     <h3 class="h6 fw-bold mb-1">{{ $plan['label'] }}</h3>
                                                     <p class="text-muted mb-2" data-plan-price-text>Precio a confirmar</p>
+                                                    <p class="small mb-2 {{ !empty($trialPromoActive) ? 'text-success' : 'text-muted' }}" data-plan-trial-text>Sin periodo de prueba activo</p>
                                                     <ul class="small text-muted mb-0">
                                                         @foreach($plan['features'] as $feature)
                                                             <li>{{ $feature }}</li>
@@ -121,6 +125,7 @@
         annual: 'MXN / año',
     };
     const selectedPeriod = periodInput?.value || 'monthly';
+    const trialPromoActive = @json(!empty($trialPromoActive));
 
     const setActivePeriod = (period) => {
         periodButtons.forEach((btn) => {
@@ -137,13 +142,31 @@
                 semiannual: Number(card.dataset.priceSemiannual || 0),
                 annual: Number(card.dataset.priceAnnual || 0),
             };
+            const trialByPeriod = {
+                monthly: Number(card.dataset.trialMonthly || 0),
+                semiannual: Number(card.dataset.trialSemiannual || 0),
+                annual: Number(card.dataset.trialAnnual || 0),
+            };
             const current = prices[period] || 0;
             const label = periodLabels[period] || 'MXN / periodo';
             const priceEl = card.querySelector('[data-plan-price-text]');
+            const trialEl = card.querySelector('[data-plan-trial-text]');
             if (priceEl) {
                 priceEl.textContent = current > 0
                     ? `${formatter.format(current)} ${label}`
                     : 'Precio a confirmar';
+            }
+            if (trialEl) {
+                const days = trialByPeriod[period] || 0;
+                if (trialPromoActive && days > 0) {
+                    trialEl.textContent = `${days} días de prueba incluidos en este periodo`;
+                    trialEl.classList.remove('text-muted');
+                    trialEl.classList.add('text-success');
+                } else {
+                    trialEl.textContent = 'Sin periodo de prueba activo';
+                    trialEl.classList.remove('text-success');
+                    trialEl.classList.add('text-muted');
+                }
             }
         });
     };

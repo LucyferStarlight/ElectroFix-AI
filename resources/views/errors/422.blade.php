@@ -1,0 +1,5 @@
+@php($code = 422)
+@php($title = 'Solicitud no procesable')
+@php($message = 'Los datos enviados no pasaron las validaciones del sistema.')
+@php($hint = 'Corrige la informacion y vuelve a intentar.')
+@include('errors.base')

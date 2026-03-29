@@ -44,7 +44,13 @@ class CompanyInsightsController extends Controller
         $company = Company::query()
             ->where('name', 'ElectroFix Developer Lab')
             ->with(['subscription', 'users'])
-            ->firstOrFail();
+            ->first();
+
+        if (! $company) {
+            $company = auth()->user()?->company?->loadMissing(['subscription', 'users']);
+        }
+
+        abort_if(! $company, 404, 'No se encontró una empresa de pruebas para tu usuario.');
 
         return view('developer.companies.show', [
             'currentPage' => 'developer-test-company',

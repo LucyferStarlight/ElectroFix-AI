@@ -1,0 +1,5 @@
+@php($code = 404)
+@php($title = 'Pagina no encontrada')
+@php($message = 'La ruta que intentaste abrir no existe o fue movida.')
+@php($hint = 'Revisa la URL o vuelve al inicio para continuar.')
+@include('errors.base')

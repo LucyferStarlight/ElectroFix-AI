@@ -1,0 +1,5 @@
+@php($code = $code ?? 500)
+@php($title = $title ?? 'Error del servidor')
+@php($message = $message ?? 'El servidor encontro un problema al procesar la solicitud.')
+@php($hint = $hint ?? 'Estamos trabajando para resolverlo lo antes posible.')
+@include('errors.base')

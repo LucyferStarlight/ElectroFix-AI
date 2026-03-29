@@ -1,0 +1,5 @@
+@php($code = 401)
+@php($title = 'No autenticado')
+@php($message = 'Debes iniciar sesion para acceder a esta seccion.')
+@php($hint = 'Ingresa con tu cuenta y vuelve a intentarlo.')
+@include('errors.base')

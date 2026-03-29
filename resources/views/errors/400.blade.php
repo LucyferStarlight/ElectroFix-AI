@@ -1,0 +1,5 @@
+@php($code = 400)
+@php($title = 'Solicitud invalida')
+@php($message = 'La solicitud no pudo ser procesada por formato o contenido invalido.')
+@php($hint = 'Revisa la informacion enviada y vuelve a intentar.')
+@include('errors.base')

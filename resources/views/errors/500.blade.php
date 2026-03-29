@@ -1,0 +1,5 @@
+@php($code = 500)
+@php($title = 'Error interno del servidor')
+@php($message = 'Ocurrio un error inesperado procesando tu solicitud.')
+@php($hint = 'Ya registramos el incidente. Intenta nuevamente en unos minutos.')
+@include('errors.base')

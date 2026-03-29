@@ -1,0 +1,5 @@
+@php($code = 502)
+@php($title = 'Puerta de enlace invalida')
+@php($message = 'El servidor recibio una respuesta invalida de un servicio upstream.')
+@php($hint = 'Intenta nuevamente en unos minutos.')
+@include('errors.base')

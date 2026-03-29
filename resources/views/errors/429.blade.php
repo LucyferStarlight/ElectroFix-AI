@@ -1,0 +1,5 @@
+@php($code = 429)
+@php($title = 'Demasiadas solicitudes')
+@php($message = 'Detectamos muchas solicitudes en poco tiempo.')
+@php($hint = 'Espera unos segundos y vuelve a intentarlo.')
+@include('errors.base')

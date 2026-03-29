@@ -1,0 +1,5 @@
+@php($code = $code ?? 400)
+@php($title = $title ?? 'Error de cliente')
+@php($message = $message ?? 'La solicitud no pudo completarse por un error del cliente.')
+@php($hint = $hint ?? 'Valida la URL y los datos enviados antes de reintentar.')
+@include('errors.base')

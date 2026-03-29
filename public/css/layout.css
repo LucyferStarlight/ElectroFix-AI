@@ -1,6 +1,8 @@
 .navbar-glass {
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 1035;
 }
 
 .page-shell {
@@ -75,9 +77,22 @@ body.theme-dark .navbar-glass {
   }
 
   .saas-sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    border-bottom: 1px solid var(--ef-border);
+    display: none !important;
+  }
+
+  .mobile-menu-trigger {
+    border-radius: 0.7rem;
+  }
+
+  .mobile-nav-dropdown {
+    position: fixed !important;
+    top: 64px !important;
+    right: 0.75rem !important;
+    left: 0.75rem !important;
+    width: auto !important;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    z-index: 2000;
+    box-shadow: 0 20px 44px rgba(2, 6, 23, 0.26);
   }
 }

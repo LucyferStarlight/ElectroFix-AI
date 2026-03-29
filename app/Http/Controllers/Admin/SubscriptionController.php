@@ -9,6 +9,7 @@ use App\Models\Subscription;
 use App\Models\SubscriptionChangeRequest;
 use App\Services\CompanySubscriptionService;
 use App\Services\PlanCatalogService;
+use App\Services\TrialPolicyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,7 +18,8 @@ class SubscriptionController extends Controller
 {
     public function __construct(
         private readonly CompanySubscriptionService $companySubscriptionService,
-        private readonly PlanCatalogService $planCatalogService
+        private readonly PlanCatalogService $planCatalogService,
+        private readonly TrialPolicyService $trialPolicyService
     ) {
     }
 
@@ -43,7 +45,7 @@ class SubscriptionController extends Controller
             'subscription' => $subscription,
             'plans' => $this->planCatalogService->publicPlans(),
             'pendingChange' => $pendingChange,
-            'showTrialBadge' => ! $hasHadSubscription,
+            'showTrialBadge' => ! $hasHadSubscription && $this->trialPolicyService->promoWindowIsActive(),
         ]);
     }
 

@@ -1,0 +1,5 @@
+@php($code = 408)
+@php($title = 'Tiempo de solicitud agotado')
+@php($message = 'La conexion se cerró antes de completar la solicitud.')
+@php($hint = 'Verifica tu conexion e intenta nuevamente.')
+@include('errors.base')
