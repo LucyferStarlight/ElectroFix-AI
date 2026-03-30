@@ -1,2 +1,5 @@
 User-agent: *
 Disallow:
+Allow: /
+
+Sitemap: https://electrofix-ai.com.mx/sitemap.xml

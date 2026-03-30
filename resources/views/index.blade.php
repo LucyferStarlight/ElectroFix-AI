@@ -1,6 +1,27 @@
 @extends('layouts.guest')
 
 @section('title', 'ElectroFix-AI | Software para talleres de electrodomésticos')
+@section('meta_description', 'ElectroFix-AI es un SaaS para talleres de electrodomesticos con ordenes, clientes, equipos, inventario, facturacion e IA de diagnostico en una sola plataforma.')
+@section('canonical', route('landing'))
+
+@push('head')
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "ElectroFix-AI",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": "{{ route('landing') }}",
+            "offers": {
+                "@type": "Offer",
+                "priceCurrency": "MXN",
+                "availability": "https://schema.org/InStock"
+            },
+            "description": "SaaS para talleres de electrodomesticos con gestion operativa e IA de diagnostico."
+        }
+    </script>
+@endpush
 
 @section('content')
 <style>

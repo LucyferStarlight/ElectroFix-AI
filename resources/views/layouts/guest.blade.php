@@ -1,9 +1,30 @@
 <!doctype html>
 <html lang="es">
 <head>
+    @php
+        $metaTitle = trim($__env->yieldContent('title', 'ElectroFix-AI'));
+        $metaDescription = trim($__env->yieldContent('meta_description', 'ElectroFix-AI: software SaaS para talleres de electrodomesticos con ordenes, clientes, inventario, facturacion e IA de diagnostico.'));
+        $metaRobots = trim($__env->yieldContent('meta_robots', 'index,follow,max-image-preview:large'));
+        $canonicalUrl = trim($__env->yieldContent('canonical', url()->current()));
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'ElectroFix-AI')</title>
+    <title>{{ $metaTitle }}</title>
+    <meta name="description" content="{{ $metaDescription }}">
+    <meta name="robots" content="{{ $metaRobots }}">
+    <link rel="canonical" href="{{ $canonicalUrl }}">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ $metaTitle }}">
+    <meta property="og:description" content="{{ $metaDescription }}">
+    <meta property="og:url" content="{{ $canonicalUrl }}">
+    <meta property="og:site_name" content="ElectroFix-AI">
+    <meta property="og:locale" content="es_MX">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $metaTitle }}">
+    <meta name="twitter:description" content="{{ $metaDescription }}">
+    @if((string) env('GOOGLE_SITE_VERIFICATION', '') !== '')
+        <meta name="google-site-verification" content="{{ env('GOOGLE_SITE_VERIFICATION') }}">
+    @endif
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -11,6 +32,7 @@
     <link rel="stylesheet" href="{{ asset('css/base.css') }}">
     <link rel="stylesheet" href="{{ asset('css/components.css') }}">
     <link rel="stylesheet" href="{{ asset('css/layout.css') }}">
+    @stack('head')
 </head>
 <body class="guest-layout bg-app">
     @include('partials.alerts')

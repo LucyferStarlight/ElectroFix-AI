@@ -20,6 +20,20 @@ use App\Http\Controllers\Worker\OrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [PublicSubscriptionController::class, 'index'])->name('landing');
+Route::get('/sitemap.xml', function () {
+    $now = now()->toAtomString();
+    $urls = [
+        ['loc' => route('landing'), 'lastmod' => $now, 'changefreq' => 'daily', 'priority' => '1.0'],
+        ['loc' => route('register'), 'lastmod' => $now, 'changefreq' => 'weekly', 'priority' => '0.9'],
+        ['loc' => route('login'), 'lastmod' => $now, 'changefreq' => 'weekly', 'priority' => '0.8'],
+        ['loc' => route('support'), 'lastmod' => $now, 'changefreq' => 'weekly', 'priority' => '0.7'],
+        ['loc' => route('terms'), 'lastmod' => $now, 'changefreq' => 'monthly', 'priority' => '0.5'],
+    ];
+
+    return response()
+        ->view('sitemap', ['urls' => $urls])
+        ->header('Content-Type', 'application/xml; charset=UTF-8');
+})->name('sitemap');
 Route::view('/terms-and-conditions', 'terms')->name('terms');
 Route::get('/login', [AuthController::class, 'showLoginForm'])->middleware('guest')->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('guest')->name('login.store');
